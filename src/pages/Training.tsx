@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, Trash2, Dumbbell, ChevronDown, ChevronUp, Timer, Flame, Activity, BookOpen, Camera, Sparkles, X, Pencil, HelpCircle, Check, Play, Search, StickyNote } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { formatDate, todayISO } from '../lib/utils'
+import { equipmentRank, findBest, gifUrl, imgUrl, loadExercises, norm, searchKey, type PoolExercise } from '../lib/exercises'
 import { Modal } from '../components/ui/Modal'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Spinner } from '../components/ui/Spinner'
@@ -386,85 +387,13 @@ function getTip(name: string): UebungTip | null {
   return null
 }
 
-// ─── Local Exercise Dataset ───────────────────────────────────────────────────
+// ─── Übungspool (deutsch) ─────────────────────────────────────────────────────
 
-interface LocalExercise {
-  id: string; name: string; category: string; body_part: string
-  equipment: string; instructions: string; instruction_steps: string[]
-  muscle_group: string; secondary_muscles: string[]; target: string; image: string; gif_url: string
+async function loadLocalExercises(): Promise<PoolExercise[]> {
+  try { return await loadExercises() } catch { return [] }
 }
 
-const EX_BASE = import.meta.env.BASE_URL + 'exercises/'
-let _localExCache: LocalExercise[] | null = null
-
-async function loadLocalExercises(): Promise<LocalExercise[]> {
-  if (_localExCache) return _localExCache
-  try {
-    const r = await fetch(EX_BASE + 'data/exercises_clean.json')
-    _localExCache = await r.json()
-    return _localExCache!
-  } catch { _localExCache = []; return [] }
-}
-
-const DE_TO_EN_EX: Record<string, string> = {
-  'seitheben': 'side lateral raise',
-  'bankdrücken': 'barbell bench press',
-  'kniebeuge': 'barbell squat',
-  'kniebeugen': 'barbell squat',
-  'kreuzheben': 'barbell deadlift',
-  'klimmzug': 'wide-grip pullup',
-  'klimmzüge': 'wide-grip pullup',
-  'schulterdrücken': 'barbell shoulder press',
-  'rudern': 'bent over barbell row',
-  'kabelrudern': 'seated cable row',
-  'bizeps curl': 'barbell curl',
-  'bizepscurl': 'barbell curl',
-  'trizepsdrücken': 'triceps dip',
-  'beinstrecken': 'leg extension',
-  'beinbeugen': 'seated leg curl',
-  'plank': 'plank',
-  'dips': 'chest dip',
-  'liegestützen': 'push-up',
-  'liegestütze': 'push-up',
-  'latzug': 'cable lat pulldown',
-  'beinpresse': 'leg press',
-  'wadenheben': 'calf raise',
-  'hip thrust': 'barbell hip thrust',
-  'ausfallschritt': 'barbell lunge',
-  'ausfallschritte': 'barbell lunge',
-  'schrägbankdrücken': 'incline barbell bench press',
-  'crunch': 'crunch',
-  'sit-up': 'sit-up',
-  'situp': 'sit-up',
-  'hammer curl': 'hammer curl',
-  'hammercurl': 'hammer curl',
-  'goblet squat': 'goblet squat',
-  'arnold press': 'arnold press',
-  'beinheben': 'hanging leg raise',
-  'russian twist': 'russian twist',
-  'butterfly': 'peck deck fly',
-  'rückenstrecker': 'back extension',
-  'hyperextension': 'back extension',
-  'face pull': 'face pull',
-  'trizeps pushdown': 'triceps pushdown',
-  'rumänisches kreuzheben': 'romanian deadlift',
-  'bulgarian split squat': 'bulgarian split squat',
-}
-
-function findLocalExercise(name: string, list: LocalExercise[]): LocalExercise | null {
-  const q = name.toLowerCase().trim()
-  const exact = list.find(e => e.name.toLowerCase() === q)
-  if (exact) return exact
-  const contains = list.find(e => e.name.toLowerCase().includes(q) || q.includes(e.name.toLowerCase()))
-  if (contains) return contains
-  const enTerm = DE_TO_EN_EX[q]
-  if (enTerm) {
-    return list.find(e => e.name.toLowerCase() === enTerm)
-      ?? list.find(e => e.name.toLowerCase().includes(enTerm.split(' ')[0]))
-      ?? null
-  }
-  return null
-}
+const findLocalExercise = (name: string, list: PoolExercise[]): PoolExercise | null => findBest(name, list) ?? null
 
 // ─── Exercise Tip Modal ───────────────────────────────────────────────────────
 
@@ -476,7 +405,7 @@ const MUSKEL_LABELS: Record<string, string> = {
 
 function UebungTipModal({ name, onClose }: { name: string; onClose: () => void }) {
   const tip = getTip(name)
-  const [localEx, setLocalEx] = useState<LocalExercise | null>(null)
+  const [localEx, setLocalEx] = useState<PoolExercise | null>(null)
   const [localLoading, setLocalLoading] = useState(true)
   const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(name + ' richtige Ausführung Technik')}`
 
@@ -505,9 +434,9 @@ function UebungTipModal({ name, onClose }: { name: string; onClose: () => void }
                 <div className="text-xs text-brand font-medium mt-0.5">{tip.muskel}</div>
                 <div className="text-xs text-text-muted">{tip.sekundaer}</div>
               </>
-            ) : localEx?.target ? (
-              <div className="text-xs text-brand font-medium mt-0.5 capitalize">
-                {localEx.target}{localEx.body_part ? ` · ${localEx.body_part}` : ''}
+            ) : localEx?.target_de ? (
+              <div className="text-xs text-brand font-medium mt-0.5">
+                {localEx.target_de}{localEx.body_part_de ? ` · ${localEx.body_part_de}` : ''}
               </div>
             ) : null}
           </div>
@@ -520,9 +449,12 @@ function UebungTipModal({ name, onClose }: { name: string; onClose: () => void }
             <div className="w-full rounded-xl bg-bg-elevated flex items-center justify-center" style={{ aspectRatio: '4/3' }}>
               <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : localEx?.gif_url ? (
+          ) : localEx ? (
             <div className="w-full rounded-xl overflow-hidden bg-bg-elevated" style={{ aspectRatio: '4/3' }}>
-              <img src={EX_BASE + localEx.gif_url} alt="" className="w-full h-full object-contain" />
+              <img
+                src={gifUrl(localEx)} alt="" className="w-full h-full object-contain"
+                onError={e => { const img = e.currentTarget; if (!img.dataset.fb) { img.dataset.fb = '1'; img.src = imgUrl(localEx) } }}
+              />
             </div>
           ) : null}
 
@@ -568,11 +500,11 @@ function UebungTipModal({ name, onClose }: { name: string; onClose: () => void }
                 </ul>
               </div>
             </>
-          ) : localEx?.instruction_steps?.length ? (
+          ) : localEx?.steps?.length ? (
             <div>
               <div className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-2">Richtige Ausführung</div>
               <ul className="space-y-2">
-                {localEx!.instruction_steps.map((step, i) => (
+                {localEx!.steps.map((step, i) => (
                   <li key={i} className="flex gap-2.5 text-sm text-text-secondary">
                     <span className="w-5 h-5 rounded-full bg-brand/20 text-brand text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
                     {step}
@@ -598,18 +530,19 @@ function UebungTipModal({ name, onClose }: { name: string; onClose: () => void }
 // ─── Exercise Picker Modal ────────────────────────────────────────────────────
 
 function ExercisePickerModal({ onSelect, onClose }: { onSelect: (name: string) => void; onClose: () => void }) {
-  const [list, setList] = useState<LocalExercise[]>([])
+  const [list, setList] = useState<PoolExercise[]>([])
   const [query, setQuery] = useState('')
 
   useEffect(() => { loadLocalExercises().then(setList) }, [])
 
-  const filtered = list.length === 0 ? [] : (() => {
-    const q = query.toLowerCase()
-    return (q
-      ? list.filter(e => e.name.toLowerCase().includes(q) || e.body_part?.toLowerCase().includes(q))
-      : list
-    ).sort((a, b) => a.name.localeCompare(b.name, 'de')).slice(0, 80)
-  })()
+  const keys = useMemo(() => new Map(list.map(e => [e.id, searchKey(e)])), [list])
+  const filtered = useMemo(() => {
+    const words = norm(query).split(' ').filter(Boolean)
+    return list
+      .filter(e => !words.length || words.every(w => (keys.get(e.id) ?? '').includes(w)))
+      .sort((a, b) => a.name.localeCompare(b.name, 'de'))
+      .slice(0, 80)
+  }, [list, keys, query])
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-0 sm:p-4" onClick={onClose}>
@@ -628,7 +561,7 @@ function ExercisePickerModal({ onSelect, onClose }: { onSelect: (name: string) =
         </div>
         <div className="overflow-y-auto">
           {list.length === 0 ? (
-            <div className="py-10 text-center text-sm text-text-muted">Keine Übungen geladen.<br/>exercises.json in public/exercises/ kopieren.</div>
+            <div className="py-10 text-center text-sm text-text-muted">Der Übungspool konnte nicht geladen werden.<br />Prüfe deine Internetverbindung.</div>
           ) : filtered.length === 0 ? (
             <div className="py-8 text-center text-sm text-text-muted">Keine Treffer.</div>
           ) : filtered.map(ex => (
@@ -638,12 +571,12 @@ function ExercisePickerModal({ onSelect, onClose }: { onSelect: (name: string) =
               className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-bg-elevated transition-colors text-left"
             >
               <div className="w-10 h-10 rounded-lg bg-bg-elevated overflow-hidden shrink-0">
-                <img src={EX_BASE + ex.image} alt="" className="w-full h-full object-cover"
+                <img src={imgUrl(ex)} alt="" loading="lazy" className="w-full h-full object-cover"
                   onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-text-primary truncate">{ex.name}</div>
-                <div className="text-xs text-text-muted">{ex.body_part}</div>
+                <div className="text-xs text-text-muted truncate">{ex.target_de} · {ex.equipment_de}</div>
               </div>
             </button>
           ))}
@@ -656,18 +589,22 @@ function ExercisePickerModal({ onSelect, onClose }: { onSelect: (name: string) =
 // ─── Exercise Name Input with Autocomplete ────────────────────────────────────
 
 function ExerciseNameInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [suggestions, setSuggestions] = useState<LocalExercise[]>([])
+  const [suggestions, setSuggestions] = useState<PoolExercise[]>([])
   const [open, setOpen] = useState(false)
-  const [allEx, setAllEx] = useState<LocalExercise[]>([])
+  const [allEx, setAllEx] = useState<PoolExercise[]>([])
   const wrapRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { loadLocalExercises().then(setAllEx) }, [])
 
   useEffect(() => {
-    const q = value.toLowerCase().trim()
-    if (q.length < 2 || allEx.length === 0) { setSuggestions([]); return }
+    const words = norm(value).split(' ').filter(Boolean)
+    if (norm(value).length < 2 || allEx.length === 0) { setSuggestions([]); return }
+    const first = norm(value)
     const res = allEx
-      .filter(e => e.name.toLowerCase().includes(q) || e.body_part?.toLowerCase().includes(q) || e.target?.toLowerCase().includes(q))
+      .filter(e => { const k = searchKey(e); return words.every(w => k.includes(w)) })
+      .sort((a, b) =>
+        (Number((' ' + norm(b.name)).includes(' ' + first)) - Number((' ' + norm(a.name)).includes(' ' + first))) ||
+        (b.compound - a.compound) || (equipmentRank(a) - equipmentRank(b)) || a.name.length - b.name.length)
       .slice(0, 7)
     setSuggestions(res)
     setOpen(res.length > 0)
@@ -699,12 +636,12 @@ function ExerciseNameInput({ value, onChange }: { value: string; onChange: (v: s
               className="flex items-center gap-2.5 w-full px-3 py-2 hover:bg-bg-elevated transition-colors text-left"
             >
               <div className="w-8 h-8 rounded-lg bg-bg-elevated overflow-hidden shrink-0">
-                <img src={EX_BASE + ex.image} alt="" className="w-full h-full object-cover"
+                <img src={imgUrl(ex)} alt="" loading="lazy" className="w-full h-full object-cover"
                   onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-xs font-semibold text-text-primary truncate">{ex.name}</div>
-                <div className="text-[10px] text-text-muted">{ex.body_part}</div>
+                <div className="text-[10px] text-text-muted truncate">{ex.target_de} · {ex.equipment_de}</div>
               </div>
             </button>
           ))}

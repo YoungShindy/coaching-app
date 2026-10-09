@@ -84,6 +84,26 @@ export function findByName(name: string, pool: PoolExercise[]): PoolExercise | u
   return pool.find(e => norm(e.name) === n) ?? pool.find(e => norm(e.name_en) === n)
 }
 
+const EQ_RANK: Record<string, number> = { Langhantel: 0, Kurzhantel: 1, Maschine: 2, Kabel: 3, 'Körpergewicht': 4 }
+
+/** Gängige Geräte zuerst: Langhantel, Kurzhantel, Maschine, Kabel, Körpergewicht, dann der Rest. */
+export const equipmentRank = (e: Pick<PoolExercise, 'equipment_group'>) => EQ_RANK[e.equipment_group] ?? 5
+
+/** Wie findByName, findet aber auch ungefähre Namen („Bankdrücken“ → Langhantel-Bankdrücken, „Kniebeugen“ → Kniebeuge). */
+export function findBest(name: string, pool: PoolExercise[]): PoolExercise | undefined {
+  const exact = findByName(name, pool)
+  if (exact) return exact
+  const words = norm(name).split(' ').filter(Boolean)
+  if (!words.length) return undefined
+  const hits = pool.filter(e => {
+    const k = norm(`${e.name} ${e.name_en}`)
+    return words.every(w => k.includes(w) || (w.length > 4 && k.includes(w.slice(0, -1))))
+  })
+  hits.sort((a, b) =>
+    (b.compound - a.compound) || (equipmentRank(a) - equipmentRank(b)) || a.name.length - b.name.length)
+  return hits[0]
+}
+
 // Muskelgruppe aus dem Namen raten, wenn die Übung nicht im Pool steht (eigene Namen)
 const GUESS: [RegExp, GroupKey][] = [
   [/kniebeuge|squat|beinpresse|leg press|ausfallschritt|lunge|beinstrecker|leg extension|step.?up/, 'quadrizeps'],
