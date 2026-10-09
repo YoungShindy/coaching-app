@@ -218,6 +218,7 @@ export function Dashboard() {
   const [gameGaveUp, setGameGaveUp] = useState(false)
   // Das Onboarding bleibt bis zur Abschlussseite stehen, auch wenn die Figur dabei schon angelegt wird
   const onboarding = useRef(false)
+  const plainAnamnese = useRef(false)
   useEffect(() => {
     // Falls die Spieldaten nicht laden, geht es nach kurzer Zeit ohne Figur weiter
     if (!showAnamnese || game.loaded) return
@@ -331,10 +332,14 @@ export function Dashboard() {
 
   if (showAnamnese && user && profile?.role === 'client') {
     // Neue Konten: Kennenlernen, Anamnese, Figur. Fehlt das Spiel (noch), bleibt es bei der Anamnese.
-    if (!game.loaded && !gameGaveUp) return <div className="flex justify-center py-24"><Spinner size={32} /></div>
-    if (game.available && !game.character) onboarding.current = true
+    // Die Entscheidung fällt einmal und bleibt: eine halb ausgefüllte Anamnese wird nie nachträglich durch das Onboarding ersetzt
+    if (!onboarding.current && !plainAnamnese.current) {
+      if (!game.loaded && !gameGaveUp) return <div className="flex justify-center py-24"><Spinner size={32} /></div>
+      if (game.available && !game.character) onboarding.current = true
+      else plainAnamnese.current = true
+    }
     if (onboarding.current) return <Onboarding withAnamnese onDone={() => { onboarding.current = false; setShowAnamnese(false) }} />
-    return <Anamnese userId={user.id} onDone={() => setShowAnamnese(false)} />
+    return <Anamnese userId={user.id} onDone={() => { plainAnamnese.current = false; setShowAnamnese(false) }} />
   }
 
   const now = new Date()

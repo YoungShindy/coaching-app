@@ -67,8 +67,8 @@ export function dayAwards(f: DayAwardFacts): Award[] {
   }
   if (f.sleep) out.push({ quelle: 'schlaf', ref: f.date, xp: 8, punkte: 0, titel: 'Schlaf eingetragen' })
   if (f.weight) out.push({ quelle: 'gewicht', ref: f.date, xp: 5, punkte: 0, titel: 'Gewogen' })
-  // Höchstens zwei Einheiten pro Tag zählen
-  for (const id of f.trainingIds.slice(0, 2)) out.push({ quelle: 'training', ref: id, xp: 30, punkte: 10, titel: 'Training geschafft' })
+  // Höchstens zwei Einheiten pro Tag zählen. Die Referenz ist Tag + Nummer (nicht die Zeile), damit Löschen und Neu-Eintragen nichts doppelt bringt.
+  for (let i = 0; i < Math.min(2, f.trainingIds.length); i++) out.push({ quelle: 'training', ref: `${f.date}:${i + 1}`, xp: 30, punkte: 10, titel: 'Training geschafft' })
   if (f.supplementsTotal > 0 && f.supplementsTaken >= f.supplementsTotal) out.push({ quelle: 'supplements', ref: f.date, xp: 8, punkte: 0, titel: 'Supplements genommen' })
   if (f.waterGoalMl > 0 && f.waterMl >= f.waterGoalMl) out.push({ quelle: 'wasser', ref: f.date, xp: 20, punkte: 10, titel: 'Wasserziel erreicht' })
   if (isGreenDay(f)) out.push({ quelle: 'gruener-tag', ref: f.date, xp: 30, punkte: 20, titel: 'Grüner Tag' })

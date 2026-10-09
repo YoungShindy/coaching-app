@@ -16,18 +16,21 @@ export function ShopTab() {
   const [cat, setCat] = useState<ShopCategory>('kleidung')
   const [msg, setMsg] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null)
   const [popId, setPopId] = useState<string | null>(null)
+  const [buying, setBuying] = useState(false)
   if (!character) return null
 
   const items = SHOP.filter(i => CATEGORY_SLOTS[cat].includes(i.slot)).sort((a, b) => a.minLevel - b.minLevel || a.preis - b.preis)
   const worn = Object.values(character.equipped).filter(Boolean).length
 
   async function onBuy(item: ShopItem) {
-    setMsg(null)
+    if (buying) return
+    setBuying(true); setMsg(null)
     const err = await buy(item)
-    if (err) { setMsg({ tone: 'warn', text: err }); return }
+    if (err) { setBuying(false); setMsg({ tone: 'warn', text: err }); return }
     setPopId(item.id)
     window.setTimeout(() => setPopId(null), 900)
     await equip(toggleEquip(character!.equipped, item))
+    setBuying(false)
     setMsg({ tone: 'ok', text: `${item.name} gehört jetzt dir und ist angezogen.` })
   }
 
@@ -85,7 +88,7 @@ export function ShopTab() {
                 </button>
               )}
               {state === 'buyable' && (
-                <button onClick={() => onBuy(item)} className="btn-primary w-full !py-2 text-sm flex items-center justify-center gap-1.5">
+                <button onClick={() => onBuy(item)} disabled={buying} className="btn-primary w-full !py-2 text-sm flex items-center justify-center gap-1.5 disabled:opacity-60">
                   <Coins size={14} aria-hidden="true" /> Kaufen · {item.preis}
                 </button>
               )}

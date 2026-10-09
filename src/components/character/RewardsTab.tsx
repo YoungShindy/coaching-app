@@ -24,6 +24,7 @@ export function RewardsTab() {
   const [msg, setMsg] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [fresh, setFresh] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
 
   const reload = useCallback(async () => {
     if (!user) return
@@ -161,8 +162,9 @@ export function RewardsTab() {
           <div className="flex flex-wrap gap-2">
             {ideas.map(i => (
               <button
-                key={i.titel} onClick={() => void save({ titel: i.titel, preis: i.preis, emoji: i.emoji })}
-                className="px-3 py-2 rounded-2xl border border-border bg-bg-elevated text-sm text-text-primary hover:border-brand/50 transition-all active:scale-95 flex items-center gap-2"
+                key={i.titel} disabled={adding}
+                onClick={async () => { if (adding) return; setAdding(true); await save({ titel: i.titel, preis: i.preis, emoji: i.emoji }); setAdding(false) }}
+                className="px-3 py-2 rounded-2xl border border-border bg-bg-elevated text-sm text-text-primary hover:border-brand/50 transition-all active:scale-95 flex items-center gap-2 disabled:opacity-60"
                 aria-label={`${i.titel} für ${i.preis} Punkte hinzufügen`}
               >
                 <span aria-hidden="true">{i.emoji}</span> {i.titel} <span className="text-xs text-warning font-semibold tabular-nums">{i.preis}</span>

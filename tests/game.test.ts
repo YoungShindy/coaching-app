@@ -72,6 +72,13 @@ test('Tageserfolge: höchstens zwei Einheiten, Wasserziel nur bei Erreichen', ()
   assert.equal(dayAwards({ ...base, waterMl: 5000, waterGoalMl: 0 }).filter(x => x.quelle === 'wasser').length, 0)
 })
 
+test('Training: gleiche Referenz pro Tag, egal welche Zeilen es gibt (Löschen und Neu-Eintragen bringt nichts)', () => {
+  const refs = (ids: string[]) => dayAwards({ ...base, trainingIds: ids }).filter(x => x.quelle === 'training').map(x => x.ref)
+  assert.deepEqual(refs(['a']), ['2026-10-09:1'])
+  assert.deepEqual(refs(['x', 'y', 'z']), ['2026-10-09:1', '2026-10-09:2'])
+  assert.deepEqual(refs(['a']), refs(['b']))
+})
+
 test('Serien-Belohnung nur an Meilensteinen', () => {
   assert.equal(streakAward(4, '2026-10-01'), null)
   const s = streakAward(7, '2026-10-03')!

@@ -46,8 +46,8 @@ interface Ctx {
   dismissOffer: () => void
   createCharacter: (c: Character) => Promise<boolean>
   updateCharacter: (patch: Partial<Character>) => Promise<boolean>
-  /** Erfolge eintragen; liefert die wirklich neuen */
-  award: (list: Award[], opts?: { silent?: boolean }) => Promise<Award[]>
+  /** Erfolge eintragen; liefert die wirklich neuen, bei einem Fehler null */
+  award: (list: Award[], opts?: { silent?: boolean }) => Promise<Award[] | null>
   /** Punkte ausgeben (Shop, Belohnungen). Liefert einen Fehlertext oder null bei Erfolg. */
   spend: (quelle: string, ref: string, punkte: number, titel: string) => Promise<string | null>
   buy: (item: ShopItem) => Promise<string | null>
@@ -99,6 +99,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     return statsRef.current
   }, [])
   const toastId = useRef(0)
+  const [attempt, setAttempt] = useState(0)
+  const streakDay = useRef<string | null>(null)
 
   // ─── Laden ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -115,6 +117,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       ])
       if (cancelled) return
       if (c.error && isMissingTable(c.error)) { setAvailable(false); setLoaded(true); return }
+      // Anderer Fehler (offline, Serverproblem): nicht so tun, als gäbe es noch keine Figur. Nach kurzer Zeit erneut versuchen.
+      if (c.error || st.error) {
+        setAvailable(false); setLoaded(true)
+        if (attempt < 3) window.setTimeout(() => { if (!cancelled) setAttempt(a => a + 1) }, 6000 * (attempt + 1))
+        return
+      }
       setAvailable(true)
       setCharacter(parseCharacter(c.data as Record<string, unknown> | null))
       const s = (st.data as { xp?: number; punkte?: number } | null) ?? {}
@@ -126,17 +134,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       setLoaded(true)
     })()
     return () => { cancelled = true }
-  }, [isClient, user, applyStats])
+  }, [isClient, user, applyStats, attempt])
 
   // ─── Erfolge eintragen ─────────────────────────────────────────────────────
-  const award = useCallback(async (list: Award[], opts?: { silent?: boolean }): Promise<Award[]> => {
+  const award = useCallback(async (list: Award[], opts?: { silent?: boolean }): Promise<Award[] | null> => {
     if (!user || !list.length) return []
     list.forEach(a => known.current.add(key(a)))
     const { data, error } = await supabase
       .from('xp_events')
       .upsert(list.map(a => ({ user_id: user.id, ...a })) as never, { onConflict: 'user_id,quelle,ref', ignoreDuplicates: true })
       .select('quelle,ref,xp,punkte,titel')
-    if (error) { list.forEach(a => known.current.delete(key(a))); return [] } // beim nächsten Mal noch einmal versuchen
+    if (error) { list.forEach(a => known.current.delete(key(a))); return null } // beim nächsten Mal noch einmal versuchen
     const added = ((data ?? []) as Award[])
     if (!added.length) return []
     const xp = added.reduce((a, r) => a + r.xp, 0)
@@ -159,6 +167,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     const today = todayISO()
     const fresh = Object.values(days)
       .flatMap(d => dayAwards({ ...d, waterGoalMl: waterGoal }).map(a => (d.date === today ? a : { ...a, titel: `${a.titel} (gestern)` })))
+      .concat([WELCOME_AWARD]) // Sicherheitsnetz, falls das Geschenk beim Anlegen nicht ankam (zählt nur einmal)
       .filter(a => !known.current.has(key(a)))
     if (fresh.length) void award(fresh)
   }, [available, character, statusLoaded, days, waterGoal, award])
@@ -171,7 +180,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     if (!d || !(d.weight || d.sleep || d.mealsMain.length || d.trainingIds.length)) return
     let checked: string | null = null
     try { checked = localStorage.getItem(streakKey(user.id)) } catch { /* ignorieren */ }
-    if (checked === today) return
+    if (checked === today || streakDay.current === today) return
+    streakDay.current = today
     ;(async () => {
       const dates = new Set<string>()
       for (const table of ['gewicht', 'schlaf', 'training', 'food_log']) {
@@ -191,9 +201,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   // ─── Charakter anlegen und ändern ──────────────────────────────────────────
   const createCharacter = useCallback(async (c: Character) => {
     if (!user) return false
-    const { error } = await supabase.from('characters').upsert({
-      user_id: user.id, name: c.name, config: c.config, equipped: c.equipped, kennenlernen: c.kennenlernen ?? null, updated_at: new Date().toISOString(),
-    } as never, { onConflict: 'user_id' })
+    const { error } = await supabase.from('characters').insert({
+      user_id: user.id, name: c.name, config: c.config, equipped: c.equipped, kennenlernen: c.kennenlernen ?? null,
+    } as never)
     if (error) return false
     setCharacter(c)
     await award([WELCOME_AWARD], { silent: true })
@@ -231,6 +241,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   const equip = useCallback(async (eq: Equipped) => { await updateCharacter({ equipped: eq }) }, [updateCharacter])
 
+  const dismissLevelUp = useCallback(() => setLevelUp(null), [])
   const dismissOffer = useCallback(() => {
     setOfferDismissed(true)
     if (user) try { localStorage.setItem(offerKey(user.id), '1') } catch { /* ignorieren */ }
@@ -238,9 +249,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<Ctx>(() => ({
     available, loaded, character, stats, level: levelInfo(stats.xp), owned, toasts, levelUp,
-    dismissLevelUp: () => setLevelUp(null), offerDismissed, dismissOffer,
+    dismissLevelUp, offerDismissed, dismissOffer,
     createCharacter, updateCharacter, award, spend, buy, equip,
-  }), [available, loaded, character, stats, owned, toasts, levelUp, offerDismissed, dismissOffer, createCharacter, updateCharacter, award, spend, buy, equip])
+  }), [available, loaded, character, stats, owned, toasts, levelUp, dismissLevelUp, offerDismissed, dismissOffer, createCharacter, updateCharacter, award, spend, buy, equip])
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>
 }

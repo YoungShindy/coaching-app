@@ -80,11 +80,17 @@ export function ChallengesTab() {
       path = await uploadProof(user.id, row.id, file)
       if (!path) return 'Das Foto konnte nicht hochgeladen werden. Versuche es noch einmal oder schreib eine Notiz.'
     }
+    // Erst prüfen, dass die Challenge noch läuft, dann die Punkte eintragen (jede Challenge zählt nur einmal), erst dann abhaken.
+    // So geht nichts verloren, wenn die Verbindung dazwischen abbricht: ein zweiter Versuch trägt nichts doppelt ein.
+    const still = await supabase.from('challenges').select('id').eq('id', row.id).eq('status', 'aktiv')
+    if (still.error) return 'Das hat nicht geklappt. Versuche es noch einmal.'
+    if (!(still.data ?? []).length) { await reload(); return 'Diese Challenge läuft nicht mehr.' }
+    const added = await award([challengeAward(row.id, row.titel, row.punkte)])
+    if (added === null) return 'Die Punkte konnten nicht gutgeschrieben werden. Versuche es noch einmal.'
     const { error } = await supabase.from('challenges').update({
       status: 'erledigt', nachweis_text: note.trim() || null, nachweis_pfad: path, erledigt_am: new Date().toISOString(),
     } as never).eq('id', row.id).eq('status', 'aktiv')
     if (error) return 'Das hat nicht geklappt. Versuche es noch einmal.'
-    await award([challengeAward(row.id, row.titel, row.punkte)])
     setJustDone(row.id)
     window.setTimeout(() => setJustDone(null), 1400)
     await reload()

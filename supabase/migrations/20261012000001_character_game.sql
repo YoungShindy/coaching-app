@@ -45,6 +45,8 @@ declare
   balance integer;
 begin
   if new.punkte < 0 then
+    -- Zwei Geräte gleichzeitig: hintereinander prüfen, sonst könnte das Guthaben unter null fallen
+    perform pg_advisory_xact_lock(hashtext(new.user_id::text));
     select coalesce(sum(punkte), 0) into balance from public.xp_events where user_id = new.user_id;
     if balance + new.punkte < 0 then
       raise exception 'Nicht genug Punkte' using errcode = 'P0001';

@@ -67,7 +67,13 @@ export function Onboarding({ withAnamnese, onDone, onSkip }: {
   const [phase, setPhase] = useState<Phase>('hallo')
   const [step, setStep] = useState(0)
   const first = profile?.name?.split(' ')[0] ?? ''
-  const [k, setK] = useState<Kennenlernen>({ anrede: first, ziele: [], warum: '', erfahrung: '', zeit: '', schwierigkeiten: [] })
+  // Die Antworten bleiben als Entwurf im Browser, falls jemand nach der Anamnese abbricht, bevor die Figur fertig ist
+  const draftKey = `hlx-kennenlernen-${user?.id ?? ''}`
+  const [k, setK] = useState<Kennenlernen>(() => {
+    const empty: Kennenlernen = { anrede: first, ziele: [], warum: '', erfahrung: '', zeit: '', schwierigkeiten: [] }
+    try { return { ...empty, ...(JSON.parse(localStorage.getItem(draftKey) ?? 'null') ?? {}) } } catch { return empty }
+  })
+  const saveDraft = () => { try { localStorage.setItem(draftKey, JSON.stringify(k)) } catch { /* ignorieren */ } }
   const [config, setConfig] = useState<AvatarConfig>(() => randomConfig())
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
@@ -86,6 +92,7 @@ export function Onboarding({ withAnamnese, onDone, onSkip }: {
     const ok = await createCharacter({ name: n, config, equipped: {}, kennenlernen: { ...k, anrede: k.anrede.trim(), warum: k.warum.trim() } })
     setSaving(false)
     if (!ok) { setError('Das hat nicht geklappt. Prüfe deine Verbindung und versuche es noch einmal.'); return }
+    try { localStorage.removeItem(draftKey) } catch { /* ignorieren */ }
     setPhase('fertig')
     window.setTimeout(() => { void doneRef.current?.cheer() }, 500)
   }
@@ -184,6 +191,7 @@ export function Onboarding({ withAnamnese, onDone, onSkip }: {
               disabled={!canNext}
               onClick={() => {
                 if (step < total - 1) { setStep(step + 1); return }
+                saveDraft()
                 setPhase(withAnamnese ? 'anamnese' : 'figur')
               }}
               className="btn-primary flex-1 disabled:opacity-50 flex items-center justify-center gap-2"
