@@ -31,7 +31,7 @@ self.addEventListener('push', (e) => {
   if (!e.data) return
   const data = e.data.json()
   e.waitUntil(
-    self.registration.showNotification(data.title || 'Coaching App', {
+    self.registration.showNotification(data.title || 'HLX Together', {
       body: data.body || '',
       icon: BASE + '/icon-192.png',
       badge: BASE + '/icon-192.png',

@@ -61,7 +61,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <Zap size={18} className="text-white" />
         </div>
         <div>
-          <div className="text-sm font-bold text-text-primary">Coaching App</div>
+          <div className="text-sm font-bold text-text-primary">HLX Together</div>
           <div className="text-xs text-text-muted">{isCoach ? 'Coach' : 'Athlet'}</div>
         </div>
       </div>

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { Layout } from './components/Layout'
@@ -42,7 +43,14 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppRoutes() {
-  const { profile } = useAuth()
+  const { profile, loading } = useAuth()
+
+  // Meldet der Startanimation (index.html), dass die App bereit ist
+  useEffect(() => {
+    if (loading) return
+    ;(window as unknown as { __hlxReady?: boolean }).__hlxReady = true
+    window.dispatchEvent(new Event('app-ready'))
+  }, [loading])
 
   return (
     <Routes>

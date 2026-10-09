@@ -7,15 +7,26 @@
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
 <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
     <meta http-equiv="Permissions-Policy" content="camera=*, microphone=(), geolocation=()" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://images.openfoodfacts.org https://static.openfoodfacts.org https://raw.githubusercontent.com https://api.workoutxapp.com; connect-src 'self' https://*.supabase.co https://api.anthropic.com https://generativelanguage.googleapis.com wss://*.supabase.co https://world.openfoodfacts.org https://api.pexels.com https://api.workoutxapp.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://images.openfoodfacts.org https://static.openfoodfacts.org https://raw.githubusercontent.com https://api.workoutxapp.com; connect-src 'self' https://*.supabase.co https://api.anthropic.com https://generativelanguage.googleapis.com wss://*.supabase.co https://world.openfoodfacts.org https://api.pexels.com https://api.workoutxapp.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';" />
     <meta http-equiv="X-Frame-Options" content="DENY" />
-    <title>Coaching App</title>
+    <title>HLX Together</title>
     <link rel="manifest" href="/coaching-app/manifest.json" />
     <link rel="apple-touch-icon" href="/coaching-app/apple-touch-icon.png" />
+    <!-- Systemstartbild iOS (einfarbig Markengrün, erzeugt mit npm run splash) -->
+    <link rel="apple-touch-startup-image" href="/coaching-app/splash/ios-1320x2868.png" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" /> <!-- iPhone 16 Pro Max -->
+    <link rel="apple-touch-startup-image" href="/coaching-app/splash/ios-1290x2796.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" /> <!-- iPhone 14/15/16 Plus & Pro Max -->
+    <link rel="apple-touch-startup-image" href="/coaching-app/splash/ios-1284x2778.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" /> <!-- iPhone 12/13 Pro Max, 14 Plus -->
+    <link rel="apple-touch-startup-image" href="/coaching-app/splash/ios-1206x2622.png" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" /> <!-- iPhone 16 Pro -->
+    <link rel="apple-touch-startup-image" href="/coaching-app/splash/ios-1179x2556.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" /> <!-- iPhone 14 Pro, 15, 15 Pro, 16 -->
+    <link rel="apple-touch-startup-image" href="/coaching-app/splash/ios-1170x2532.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" /> <!-- iPhone 12/13/14, 12/13 Pro -->
+    <link rel="apple-touch-startup-image" href="/coaching-app/splash/ios-1242x2688.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" /> <!-- iPhone XS Max, 11 Pro Max -->
+    <link rel="apple-touch-startup-image" href="/coaching-app/splash/ios-828x1792.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" /> <!-- iPhone XR, 11 -->
+    <link rel="apple-touch-startup-image" href="/coaching-app/splash/ios-1125x2436.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" /> <!-- iPhone X, XS, 11 Pro, 12/13 mini -->
+    <link rel="apple-touch-startup-image" href="/coaching-app/splash/ios-750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" /> <!-- iPhone SE (2./3. Gen.), 8 -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Coaching" />
+    <meta name="apple-mobile-web-app-title" content="HLX Together" />
     <meta name="theme-color" content="#075640" />
     <meta name="color-scheme" content="dark light" />
     <script>
@@ -23,11 +34,135 @@
       try { document.documentElement.dataset.theme = localStorage.getItem('theme') === 'light' ? 'light' : 'dark' }
       catch (e) { document.documentElement.dataset.theme = 'dark' }
     </script>
+    <link rel="preload" href="splash/hlx-splash.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      /* Startanimation „HLX Together · Healthy & Athletic". Steht inline, damit sie sichtbar ist,
+         noch bevor das App-Bundle geladen ist. Schrift: Plus Jakarta Sans (OFL), nur die benötigten Zeichen.
+         Ablauf: langsamer Push-In, Wörter fahren aus Masken ein, am Ende Durchflug in die App. */
+      @font-face {
+        font-family: "HLX Splash"; font-style: normal; font-weight: 300 800; font-display: block;
+        src: url(splash/hlx-splash.woff2) format("woff2");
+      }
+      body { background: #075640; }
+      #splash {
+        position: fixed; inset: 0; z-index: 99999; display: grid; place-items: center; overflow: hidden;
+        color: #fff; cursor: pointer; font-family: "HLX Splash", "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+        transition: opacity .4s ease;
+      }
+      #splash.sp-out { opacity: 0; pointer-events: none; }
+      .sp-bg { position: absolute; inset: 0; background: #075640; }
+      .sp-bg::before {
+        content: ""; position: absolute; inset: 0; opacity: 0;
+        background: radial-gradient(circle at 50% 46%, rgb(255 255 255 / .08) 0%, rgb(255 255 255 / 0) 62%);
+        animation: sp-fade 1.4s ease-out .2s forwards;
+      }
+      .sp-art { position: relative; width: min(94vw, 420px); }
+      .sp-cam { display: block; width: 100%; height: auto; overflow: visible; transform-origin: 50% 50%; animation: sp-push 2.8s cubic-bezier(.22, .61, .36, 1) both; }
+      .sp-tg { font-size: 15px; font-weight: 600; letter-spacing: .4em; fill: #fff; animation: sp-rise-soft .8s cubic-bezier(.16, 1, .3, 1) .35s both; }
+      .sp-hero { font-size: 74px; font-weight: 700; fill: #fff; animation: sp-rise .95s cubic-bezier(.16, 1, .3, 1) both; }
+      .h1 { animation-delay: .6s; }
+      .h2 { animation-delay: .85s; }
+      .sp-amp { font-size: 30px; font-weight: 300; fill: #fff; animation: sp-fade-amp .7s ease-out .95s both; }
+      .sp-foot {
+        position: absolute; left: 0; right: 0; bottom: calc(30px + env(safe-area-inset-bottom, 0px));
+        display: grid; justify-items: center; transition: opacity .25s ease;
+      }
+      .sp-hint { font-size: 12.5px; font-weight: 500; letter-spacing: .02em; color: #cfeee3; animation: sp-fade .6s ease 1.4s both; }
+
+      /* Durchflug: Buchstaben wachsen auf den Betrachter zu, lösen sich auf, dahinter ist die App */
+      .sp-leaving .sp-art { animation: sp-fly 1s linear forwards; will-change: transform, opacity; }
+      .sp-leaving .sp-bg { animation: sp-bgout 1s cubic-bezier(.3, 0, .5, 1) forwards; }
+      .sp-leaving .sp-foot { opacity: 0; }
+      html.sp-reveal #root { animation: sp-settle 1s cubic-bezier(.2, .7, .2, 1) both; }
+
+      @keyframes sp-push { from { transform: scale(.9) } to { transform: scale(1) } }
+      @keyframes sp-rise { from { transform: translateY(100px) } to { transform: none } }
+      @keyframes sp-rise-soft { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+      @keyframes sp-fade { from { opacity: 0 } to { opacity: 1 } }
+      @keyframes sp-fade-amp { from { opacity: 0 } to { opacity: .55 } }
+      @keyframes sp-fly {
+        0% { transform: scale(1.000); opacity: 1 }
+        10% { transform: scale(1.075); opacity: 1 }
+        20% { transform: scale(1.246); opacity: 1 }
+        30% { transform: scale(1.524); opacity: 1 }
+        40% { transform: scale(1.949); opacity: 0.88 }
+        50% { transform: scale(2.595); opacity: 0.62 }
+        60% { transform: scale(3.584); opacity: 0.36 }
+        70% { transform: scale(5.122); opacity: 0.15 }
+        80% { transform: scale(7.558); opacity: 0.04 }
+        90% { transform: scale(11.496); opacity: 0 }
+        100% { transform: scale(18.000); opacity: 0 }
+      }
+      @keyframes sp-bgout { 0%, 28% { opacity: 1 } 100% { opacity: 0 } }
+      @keyframes sp-settle { from { transform: scale(1.06) } to { transform: none } }
+      /* „Bewegung reduzieren": ruhiges Endbild, danach nur Ausblenden */
+      @media (prefers-reduced-motion: reduce) {
+        #splash, #splash *, #splash .sp-bg::before { animation: none !important; transition: none !important; }
+        .sp-bg::before { opacity: 1; }
+        .sp-amp { opacity: .55; }
+      }
+    </style>
+    <noscript><style>#splash { display: none; }</style></noscript>
   </head>
   <body>
+    <!-- Startanimation: nur Schrift. Wörter als SVG-Text mit fester Breite (textLength) -->
+    <div id="splash" aria-hidden="true">
+      <div class="sp-bg"></div>
+      <div class="sp-art">
+        <svg class="sp-cam" viewBox="0 0 360 400" focusable="false">
+          <defs>
+            <clipPath id="spc1"><rect x="0" y="112" width="360" height="76" /></clipPath>
+            <clipPath id="spc2"><rect x="0" y="252" width="360" height="72" /></clipPath>
+          </defs>
+          <text class="sp-tg" x="183" y="76" text-anchor="middle">HLX TOGETHER</text>
+          <g clip-path="url(#spc1)">
+            <text class="sp-hero h1" x="24" y="178" textLength="312" lengthAdjust="spacingAndGlyphs">HEALTHY</text>
+          </g>
+          <text class="sp-amp" x="180" y="232" text-anchor="middle">&amp;</text>
+          <g clip-path="url(#spc2)">
+            <text class="sp-hero h2" x="24" y="315" textLength="312" lengthAdjust="spacingAndGlyphs">ATHLETIC</text>
+          </g>
+        </svg>
+      </div>
+      <div class="sp-foot"><span class="sp-hint">Tippen zum Überspringen</span></div>
+    </div>
+    <script>
+      // Ablauf: ca. 2,5 s Animation (0,9 s bei „Bewegung reduzieren"), dann Durchflug in die App,
+      // sobald diese bereit ist. Tippen/Enter/Esc springt direkt zum Durchflug. Notausgang nach 8 s.
+      (function () {
+        var el = document.getElementById('splash')
+        if (!el) return
+        var root = document.documentElement
+        var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        var minDone = false, ready = !!window.__hlxReady, started = false, gone = false
+        function remove() {
+          if (gone) return
+          gone = true
+          root.classList.remove('sp-reveal')
+          if (el.parentNode) el.parentNode.removeChild(el)
+        }
+        function reveal() {
+          if (started) return
+          started = true
+          if (reduce) { el.classList.add('sp-out'); setTimeout(remove, 450); return }
+          root.classList.add('sp-reveal')
+          el.classList.add('sp-leaving')
+          setTimeout(remove, 1100)
+        }
+        function check() { if (minDone && ready) reveal() }
+        function skip() { minDone = true; check() }
+        setTimeout(skip, reduce ? 900 : 2500)
+        setTimeout(reveal, 8000)
+        window.addEventListener('app-ready', function () { ready = true; check() })
+        el.addEventListener('pointerdown', skip)
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') skip()
+        })
+      })()
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

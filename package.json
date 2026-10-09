@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "build:native": "cross-env BUILD_TARGET=native tsc && cross-env BUILD_TARGET=native vite build",
     "icons": "node scripts/generate-icons.cjs",
+    "splash": "node scripts/generate-splash.cjs",
     "preview": "vite preview",
     "cap:sync": "npm run build:native && npx cap sync android",
     "cap:open": "npx cap open android"

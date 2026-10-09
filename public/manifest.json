@@ -1,6 +1,6 @@
 {
-  "name": "Coaching App",
-  "short_name": "Coaching",
+  "name": "HLX Together",
+  "short_name": "HLX Together",
   "description": "Deine persönliche Coaching-App",
   "start_url": "/coaching-app/",
   "scope": "/coaching-app/",
