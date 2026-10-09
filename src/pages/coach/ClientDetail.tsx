@@ -469,7 +469,7 @@ export function ClientDetail() {
   const [trainings, setTrainings] = useState<TrainingEntry[]>([])
   const [schlaf, setSchlaf] = useState<SchlafEntry[]>([])
   const [foodLog, setFoodLog] = useState<{ id: string; datum: string; name: string; kalorien: number | null; protein_g: number | null; kohlenhydrate_g: number | null; fett_g: number | null }[]>([])
-  const [uebungenMap, setUebungenMap] = useState<Record<string, { id: string; uebungsname: string; saetze: number | null; wdh: number | null; gewicht_kg: number | null; saetze_log: { wdh: number | null; kg: number | null }[] | null }[]>>({})
+  const [uebungenMap, setUebungenMap] = useState<Record<string, { id: string; uebungsname: string; saetze: number | null; wdh: number | null; gewicht_kg: number | null; saetze_log: { wdh: number | null; kg: number | null }[] | null; notizen?: string | null }[]>>({})
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'overview' | 'anamnese' | 'weight' | 'training' | 'sleep' | 'nutrition' | 'masterplan' | 'haushalt'>('overview')
   const [notizen, setNotizen] = useState('')
@@ -510,7 +510,7 @@ export function ClientDetail() {
       if (trainingData.length > 0) {
         const { data: uebungen } = await supabase
           .from('uebungen')
-          .select('id, training_id, uebungsname, saetze, wdh, gewicht_kg, saetze_log')
+          .select('id, training_id, uebungsname, saetze, wdh, gewicht_kg, saetze_log, notizen')
           .in('training_id', trainingData.map(t => t.id))
         const map: typeof uebungenMap = {}
         for (const u of (uebungen ?? [])) {
@@ -860,13 +860,18 @@ export function ClientDetail() {
                           {u.saetze_log && u.saetze_log.length > 0 ? (
                             <div className="mt-2 flex flex-wrap gap-1.5">
                               {u.saetze_log.map((s, i) => (
-                                <span key={i} className="text-xs bg-bg-base px-2 py-1 rounded text-text-secondary">
+                                <span key={i} className="text-xs bg-bg px-2 py-1 rounded text-text-secondary">
                                   S{i + 1}: {s.wdh ?? '?'} Wdh × {s.kg ?? '?'} kg
                                 </span>
                               ))}
                             </div>
                           ) : (
                             <div className="text-xs text-text-muted mt-1">{u.saetze ?? '?'} Sätze × {u.wdh ?? '?'} Wdh{u.gewicht_kg ? ` @ ${u.gewicht_kg} kg` : ''}</div>
+                          )}
+                          {u.notizen && (
+                            <p className="mt-2 text-xs text-text-secondary border-l-2 border-brand/50 pl-2">
+                              <span className="font-semibold text-text-primary">Notiz:</span> {u.notizen}
+                            </p>
                           )}
                           {prev && (
                             <div className="text-[11px] text-text-muted mt-1.5">

@@ -7,7 +7,7 @@ import { Login } from './pages/Login'
 import { Register } from './pages/Register'
 import { Dashboard } from './pages/Dashboard'
 import { Weight } from './pages/Weight'
-import { Training } from './pages/Training'
+import { Training } from './pages/TrainingHub'
 import { Sleep } from './pages/Sleep'
 import { Nutrition } from './pages/Nutrition'
 import { Supplements } from './pages/Supplements'
@@ -15,10 +15,8 @@ import { Calendar } from './pages/Calendar'
 import { Settings } from './pages/Settings'
 import { CoachDashboard } from './pages/coach/CoachDashboard'
 import { ClientDetail } from './pages/coach/ClientDetail'
-import { TrainingVorlagen } from './pages/TrainingVorlagen'
 import { Rezepte } from './pages/Rezepte'
 import { Legal } from './pages/Legal'
-import { Uebungspool } from './pages/Uebungspool'
 import { More } from './pages/More'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -65,8 +63,9 @@ function AppRoutes() {
       </ProtectedRoute>} />
       <Route path="/weight" element={<ProtectedRoute><Weight /></ProtectedRoute>} />
       <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
-      <Route path="/training/vorlagen" element={<ProtectedRoute><TrainingVorlagen /></ProtectedRoute>} />
-      <Route path="/uebungen" element={<ProtectedRoute><Uebungspool /></ProtectedRoute>} />
+      {/* Vorlagen und Übungspool sind Reiter im Training; alte Links bleiben gültig */}
+      <Route path="/training/vorlagen" element={<Navigate to="/training?tab=vorlagen" replace />} />
+      <Route path="/uebungen" element={<Navigate to="/training?tab=uebungen" replace />} />
       <Route path="/sleep" element={<ProtectedRoute><Sleep /></ProtectedRoute>} />
       <Route path="/nutrition" element={<ProtectedRoute><Nutrition /></ProtectedRoute>} />
       <Route path="/rezepte" element={<ProtectedRoute><Rezepte /></ProtectedRoute>} />

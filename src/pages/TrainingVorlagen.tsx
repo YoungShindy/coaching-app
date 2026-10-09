@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, BookOpen, ChevronDown, ChevronUp, ArrowLeft, CalendarDays } from 'lucide-react'
+import { Plus, Trash2, BookOpen, ChevronDown, ChevronUp, ArrowLeft, CalendarDays, Layers } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { format, addWeeks, parseISO, getDay, addDays } from 'date-fns'
 import { supabase } from '../lib/supabase'
@@ -15,12 +15,19 @@ const JS_TO_OUR: Record<number, number> = { 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 
 const OUR_TO_JS: Record<number, number> = { 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 0 }
 
 interface UebungRow {
-  id?: string; uebungsname: string; saetze: string; wdh: string; gewicht_kg: string
+  id?: string; uebungsname: string; saetze: string; wdh: string; gewicht_kg: string; wdh_text?: string | null
 }
 
 interface Vorlage {
   id: string; name: string; trainingstyp: string | null; wochentage: string | null; created_at: string
+  plan_name?: string | null; plan_reihenfolge?: number | null
   uebungen?: UebungRow[]; expanded?: boolean
+}
+
+/** Im Plan-Block steht der Planname schon in der Überschrift, die Karte zeigt nur den Tag. */
+function displayName(v: Vorlage): string {
+  const prefix = v.plan_name ? `${v.plan_name} · ` : ''
+  return prefix && v.name.startsWith(prefix) && v.name.length > prefix.length ? v.name.slice(prefix.length) : v.name
 }
 
 function parseDays(wochentage: string | null): number[] {
@@ -28,7 +35,7 @@ function parseDays(wochentage: string | null): number[] {
   return wochentage.split(',').map(Number).filter(Boolean)
 }
 
-export function TrainingVorlagen() {
+export function TrainingVorlagen({ embedded = false, onBuildPlan }: { embedded?: boolean; onBuildPlan?: () => void }) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [vorlagen, setVorlagen] = useState<Vorlage[]>([])
@@ -43,6 +50,7 @@ export function TrainingVorlagen() {
   const [calWeeks, setCalWeeks] = useState('8')
   const [calStart, setCalStart] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [calSaving, setCalSaving] = useState(false)
+  const [notice, setNotice] = useState('')
 
   async function load() {
     if (!user) return
@@ -53,7 +61,7 @@ export function TrainingVorlagen() {
     const { data: uData } = await supabase.from('vorlagen_uebungen').select('*').in('vorlage_id', ids).order('reihenfolge')
     const uMap = (uData ?? []).reduce<Record<string, UebungRow[]>>((acc, u: any) => {
       if (!acc[u.vorlage_id]) acc[u.vorlage_id] = []
-      acc[u.vorlage_id].push({ id: u.id, uebungsname: u.uebungsname, saetze: String(u.saetze ?? ''), wdh: String(u.wdh ?? ''), gewicht_kg: String(u.gewicht_kg ?? '') })
+      acc[u.vorlage_id].push({ id: u.id, uebungsname: u.uebungsname, wdh_text: u.wdh_text ?? null, saetze: String(u.saetze ?? ''), wdh: String(u.wdh ?? ''), gewicht_kg: String(u.gewicht_kg ?? '') })
       return acc
     }, {})
 
@@ -151,93 +159,137 @@ export function TrainingVorlagen() {
 
     setCalSaving(false)
     setCalModalVorlage(null)
-    alert(`${unique.length} Kalendereinträge erstellt!`)
+    setNotice(`${unique.length} Kalendereinträge erstellt.`)
+    window.setTimeout(() => setNotice(''), 4000)
+  }
+
+  // Vorlagen aus dem Plan-Baukasten werden unter dem Namen ihres Plans gesammelt
+  const sections = (() => {
+    const plans = new Map<string, Vorlage[]>()
+    const single: Vorlage[] = []
+    for (const v of vorlagen) {
+      if (v.plan_name) (plans.get(v.plan_name) ?? plans.set(v.plan_name, []).get(v.plan_name)!).push(v)
+      else single.push(v)
+    }
+    for (const list of plans.values()) list.sort((a, b) => (a.plan_reihenfolge ?? 0) - (b.plan_reihenfolge ?? 0))
+    return { plans: [...plans], single }
+  })()
+
+  const renderCard = (v: Vorlage, index: number) => {
+    const days = parseDays(v.wochentage)
+    return (
+      <div key={v.id} className="card enter" style={{ '--d': 60 + index * 55 } as React.CSSProperties}>
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center shrink-0">
+            <BookOpen size={18} className="text-brand" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-text-primary truncate">{displayName(v)}</div>
+            <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+              <span className="text-xs text-text-muted">{v.trainingstyp} · {v.uebungen?.length ?? 0} Übungen</span>
+              {days.length > 0 && (
+                <div className="flex gap-1">
+                  {WEEKDAYS.map((d, i) => (
+                    <span key={d} className={`text-xs w-5 h-5 rounded flex items-center justify-center font-medium ${days.includes(i + 1) ? 'bg-brand/20 text-brand' : 'text-text-muted'}`}>
+                      {d[0]}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {days.length > 0 && (
+              <button onClick={() => setCalModalVorlage(v)} className="p-1.5 rounded-lg hover:bg-success/10 hover:text-success text-text-muted transition-colors" title="Im Kalender eintragen" aria-label="Im Kalender eintragen">
+                <CalendarDays size={16} />
+              </button>
+            )}
+            <button onClick={() => toggle(v.id)} className="p-1.5 rounded-lg hover:bg-bg-elevated text-text-muted hover:text-text-primary transition-colors" aria-label={v.expanded ? 'Übungen ausblenden' : 'Übungen anzeigen'}>
+              {v.expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+            <button onClick={() => handleDelete(v.id)} className="p-1.5 rounded-lg hover:bg-danger/10 hover:text-danger text-text-muted transition-colors" aria-label="Vorlage löschen">
+              <Trash2 size={16} />
+            </button>
+          </div>
+        </div>
+
+        {v.expanded && (v.uebungen?.length ?? 0) > 0 && (
+          <div className="mt-4 pt-4 border-t border-border space-y-2">
+            {v.uebungen!.map((u, i) => (
+              <div key={i} className="flex items-center justify-between gap-3 text-sm p-2.5 rounded-xl bg-bg-elevated">
+                <span className="font-medium text-text-primary min-w-0 truncate">{u.uebungsname}</span>
+                <span className="text-text-secondary text-xs whitespace-nowrap">
+                  {u.saetze && (u.wdh_text || u.wdh) ? `${u.saetze}×${u.wdh_text || u.wdh}` : ''}
+                  {u.gewicht_kg ? ` @ ${u.gewicht_kg}kg` : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/training')} className="p-2 rounded-lg hover:bg-bg-elevated text-text-secondary hover:text-text-primary transition-colors">
-            <ArrowLeft size={18} />
-          </button>
-          <div>
-            <h1 className="section-title text-2xl">Trainingsvorlagen</h1>
-            <p className="text-text-secondary text-sm mt-0.5">Push Day, Pull Day, Legs…</p>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        {embedded ? (
+          <p className="text-text-secondary text-sm">Deine Trainingstage zum Starten und für den Kalender.</p>
+        ) : (
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate('/training')} className="p-2 rounded-lg hover:bg-bg-elevated text-text-secondary hover:text-text-primary transition-colors" aria-label="Zurück">
+              <ArrowLeft size={18} />
+            </button>
+            <div>
+              <h1 className="section-title text-2xl">Trainingsvorlagen</h1>
+              <p className="text-text-secondary text-sm mt-0.5">Push Day, Pull Day, Legs…</p>
+            </div>
           </div>
+        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {onBuildPlan && (
+            <button onClick={onBuildPlan} className="btn-secondary flex items-center gap-2 text-sm">
+              <Layers size={16} /> Eigenen Plan bauen
+            </button>
+          )}
+          <button onClick={() => setOpen(true)} className="btn-primary flex items-center gap-2 text-sm">
+            <Plus size={16} /> Vorlage erstellen
+          </button>
         </div>
-        <button onClick={() => setOpen(true)} className="btn-primary flex items-center gap-2">
-          <Plus size={18} /> Vorlage erstellen
-        </button>
       </div>
 
-      <div className="space-y-3">
+      {notice && <div className="card !p-4 border-success/40 bg-success/5 text-sm text-text-primary enter" role="status">{notice}</div>}
+
+      <div className="space-y-6">
         {loading ? (
           <div className="flex justify-center py-8"><Spinner /></div>
         ) : vorlagen.length === 0 ? (
           <div className="card">
             <EmptyState icon={BookOpen} title="Noch keine Vorlagen"
-              description="Erstelle Vorlagen für deine typischen Trainingstage — Push Day, Pull Day, Legs…"
-              action={<button onClick={() => setOpen(true)} className="btn-primary flex items-center gap-2 mx-auto"><Plus size={16} /> Erste Vorlage erstellen</button>} />
+              description="Erstelle eine Vorlage für deinen typischen Trainingstag oder baue dir einen kompletten Plan aus dem Übungspool."
+              action={onBuildPlan ? <button onClick={onBuildPlan} className="btn-primary flex items-center gap-2 mx-auto"><Layers size={16} /> Eigenen Plan bauen</button>
+                : <button onClick={() => setOpen(true)} className="btn-primary flex items-center gap-2 mx-auto"><Plus size={16} /> Erste Vorlage erstellen</button>} />
           </div>
-        ) : vorlagen.map(v => {
-          const days = parseDays(v.wochentage)
-          return (
-            <div key={v.id} className="card">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center shrink-0">
-                  <BookOpen size={18} className="text-brand" />
+        ) : (
+          <>
+            {sections.plans.map(([plan, list]) => (
+              <section key={plan} className="space-y-3" aria-label={`Plan ${plan}`}>
+                <div className="flex items-center gap-2 px-1">
+                  <Layers size={16} className="text-brand" aria-hidden="true" />
+                  <h2 className="section-title text-base">{plan}</h2>
+                  <span className="text-xs text-text-muted">{list.length} {list.length === 1 ? 'Tag' : 'Tage'}</span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-text-primary">{v.name}</div>
-                  <div className="flex items-center gap-3 mt-0.5">
-                    <span className="text-xs text-text-muted">{v.trainingstyp} · {v.uebungen?.length ?? 0} Übungen</span>
-                    {days.length > 0 && (
-                      <div className="flex gap-1">
-                        {WEEKDAYS.map((d, i) => (
-                          <span key={d} className={`text-xs w-5 h-5 rounded flex items-center justify-center font-medium ${days.includes(i + 1) ? 'bg-brand/20 text-brand' : 'text-text-muted'}`}>
-                            {d[0]}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {days.length > 0 && (
-                    <button
-                      onClick={() => setCalModalVorlage(v)}
-                      className="p-1.5 rounded-lg hover:bg-success/10 hover:text-success text-text-muted transition-colors"
-                      title="Im Kalender eintragen"
-                    >
-                      <CalendarDays size={16} />
-                    </button>
-                  )}
-                  <button onClick={() => toggle(v.id)} className="p-1.5 rounded-lg hover:bg-bg-elevated text-text-muted hover:text-text-primary transition-colors">
-                    {v.expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </button>
-                  <button onClick={() => handleDelete(v.id)} className="p-1.5 rounded-lg hover:bg-danger/10 hover:text-danger text-text-muted transition-colors">
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-
-              {v.expanded && (v.uebungen?.length ?? 0) > 0 && (
-                <div className="mt-4 pt-4 border-t border-border space-y-2">
-                  {v.uebungen!.map((u, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm p-2.5 rounded-lg bg-bg-elevated">
-                      <span className="font-medium text-text-primary">{u.uebungsname}</span>
-                      <span className="text-text-secondary text-xs">
-                        {u.saetze && u.wdh ? `${u.saetze}×${u.wdh}` : ''}
-                        {u.gewicht_kg ? ` @ ${u.gewicht_kg}kg` : ''}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })}
+                {list.map((v, i) => renderCard(v, i))}
+              </section>
+            ))}
+            {sections.single.length > 0 && (
+              <section className="space-y-3" aria-label="Einzelne Vorlagen">
+                {sections.plans.length > 0 && <h2 className="section-title text-base px-1">Einzelne Vorlagen</h2>}
+                {sections.single.map((v, i) => renderCard(v, i))}
+              </section>
+            )}
+          </>
+        )}
       </div>
 
       {/* Create Vorlage Modal */}

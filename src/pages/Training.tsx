@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Plus, Trash2, Dumbbell, ChevronDown, ChevronUp, Timer, Flame, Activity, BookOpen, Camera, Sparkles, X, Pencil, HelpCircle, Check, Play, Search } from 'lucide-react'
+import { Plus, Trash2, Dumbbell, ChevronDown, ChevronUp, Timer, Flame, Activity, BookOpen, Camera, Sparkles, X, Pencil, HelpCircle, Check, Play, Search, StickyNote } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -763,6 +763,10 @@ function UebungForm({ entries, onChange }: {
               <input type="number" step="0.5" className="input text-sm py-2" placeholder="80" value={e.gewicht_kg} onChange={ev => update(i, 'gewicht_kg', ev.target.value)} />
             </div>
           </div>
+          <div>
+            <label className="text-xs text-text-muted mb-1 block">Notiz (optional)</label>
+            <input type="text" className="input text-sm py-2" placeholder="z. B. Sitzhöhe 4, linke Schulter zwickt" value={e.notizen} onChange={ev => update(i, 'notizen', ev.target.value)} />
+          </div>
         </div>
       ))}
       <button onClick={add} className="btn-secondary w-full text-sm flex items-center justify-center gap-2">
@@ -779,6 +783,8 @@ interface ActiveExercise {
   name: string
   sets: ActiveSet[]
   prevSets: { wdh: number | null; kg: number | null }[]
+  note?: string // optionale Notiz zu dieser Übung in diesem Training
+  prevNote?: string // letzte Notiz zu dieser Übung als Hinweis
 }
 interface ActiveWorkoutState { vorlage: any; startTime: number; exercises: ActiveExercise[] }
 
@@ -796,6 +802,11 @@ function ActiveWorkoutView({ workout, onFinish, onAbort }: {
   const [tipFor, setTipFor] = useState<string | null>(null)
   const [rest, setRest] = useState<{ exIdx: number; setIdx: number; remaining: number } | null>(null)
   const [newExName, setNewExName] = useState('')
+  const [noteOpen, setNoteOpen] = useState<Record<number, boolean>>({})
+
+  function setNote(exIdx: number, note: string) {
+    setExercises(prev => prev.map((e, i) => i === exIdx ? { ...e, note } : e))
+  }
 
   // Persist workout state (including live exercise edits) whenever exercises change
   useEffect(() => {
@@ -850,7 +861,7 @@ function ActiveWorkoutView({ workout, onFinish, onAbort }: {
   function addExercise() {
     const name = newExName.trim()
     if (!name) return
-    setExercises(prev => [...prev, { name, sets: [{ wdh: '', kg: '', done: false }, { wdh: '', kg: '', done: false }, { wdh: '', kg: '', done: false }], prevSets: [] }])
+    setExercises(prev => [...prev, { name, sets: [{ wdh: '', kg: '', done: false }, { wdh: '', kg: '', done: false }, { wdh: '', kg: '', done: false }], prevSets: [], note: '' }])
     setNewExName('')
   }
 
@@ -860,7 +871,7 @@ function ActiveWorkoutView({ workout, onFinish, onAbort }: {
   const ss = (elapsed % 60).toString().padStart(2, '0')
 
   return (
-    <div className="fixed inset-0 z-40 bg-bg-base overflow-y-auto">
+    <div className="fixed inset-0 z-40 bg-bg overflow-y-auto">
       {tipFor && <UebungTipModal name={tipFor} onClose={() => setTipFor(null)} />}
 
       {/* Sticky header */}
@@ -980,6 +991,33 @@ function ActiveWorkoutView({ workout, onFinish, onAbort }: {
               >
                 <Plus size={14} /> Satz hinzufügen (2:00)
               </button>
+
+              {/* Notiz (optional) */}
+              {ex.prevNote && !(noteOpen[exIdx] ?? !!ex.note) && (
+                <p className="mt-3 text-xs text-text-muted flex items-start gap-1.5">
+                  <StickyNote size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
+                  <span>Letztes Mal: {ex.prevNote}</span>
+                </p>
+              )}
+              {(noteOpen[exIdx] ?? !!ex.note) ? (
+                <div className="mt-3">
+                  <label htmlFor={`note-${exIdx}`} className="text-xs text-text-muted mb-1 flex items-center gap-1.5">
+                    <StickyNote size={12} aria-hidden="true" /> Notiz zu dieser Übung
+                  </label>
+                  <textarea
+                    id={`note-${exIdx}`} rows={2} className="input text-sm resize-none"
+                    placeholder={ex.prevNote ? `Letztes Mal: ${ex.prevNote}` : 'z. B. Sitzhöhe 4, Schulter zwickt, nächstes Mal mehr Gewicht'}
+                    value={ex.note ?? ''} onChange={e => setNote(exIdx, e.target.value)}
+                  />
+                </div>
+              ) : (
+                <button
+                  onClick={() => setNoteOpen(o => ({ ...o, [exIdx]: true }))}
+                  className="mt-2 text-xs text-brand hover:text-brand/80 flex items-center gap-1.5 transition-colors"
+                >
+                  <StickyNote size={12} aria-hidden="true" /> Notiz hinzufügen
+                </button>
+              )}
             </div>
           )
         })}
@@ -1010,7 +1048,7 @@ function ActiveWorkoutView({ workout, onFinish, onAbort }: {
 }
 
 
-export function Training() {
+export function TrainingLog({ embedded = false, onOpenVorlagen }: { embedded?: boolean; onOpenVorlagen?: () => void }) {
   const { user } = useAuth()
   const { colors } = useTheme()
   const navigate = useNavigate()
@@ -1081,16 +1119,18 @@ export function Training() {
     if (!user) return
     const names: string[] = (vorlage.uebungen ?? []).map((u: any) => u.uebungsname).filter(Boolean)
     const prevMap: Record<string, { wdh: number | null; kg: number | null }[]> = {}
+    const noteMap: Record<string, string> = {}
 
     if (names.length) {
       const { data: lastEx } = await supabase
         .from('uebungen')
-        .select('uebungsname, saetze_log, saetze, wdh, gewicht_kg')
+        .select('uebungsname, saetze_log, saetze, wdh, gewicht_kg, notizen')
         .eq('user_id', user.id)
         .in('uebungsname', names)
         .order('created_at', { ascending: false })
 
       for (const u of (lastEx ?? [])) {
+        if (u.notizen && !noteMap[u.uebungsname]) noteMap[u.uebungsname] = u.notizen
         if (prevMap[u.uebungsname]) continue
         if (Array.isArray(u.saetze_log) && u.saetze_log.length > 0) {
           prevMap[u.uebungsname] = u.saetze_log
@@ -1111,6 +1151,8 @@ export function Training() {
           done: false,
         })),
         prevSets: prev,
+        note: '',
+        prevNote: noteMap[u.uebungsname] ?? '',
       }
     })
 
@@ -1131,7 +1173,7 @@ export function Training() {
 
     if (training) {
       const uebungenRows = exercises
-        .filter(ex => ex.sets.some(s => s.done || s.wdh || s.kg))
+        .filter(ex => ex.sets.some(s => s.done || s.wdh || s.kg) || ex.note?.trim())
         .map(ex => {
           const tracked = ex.sets.filter(s => s.done || s.wdh || s.kg)
           return {
@@ -1142,6 +1184,7 @@ export function Training() {
             wdh: tracked[0] ? (parseInt(tracked[0].wdh) || null) : null,
             gewicht_kg: tracked[0] ? (parseFloat(tracked[0].kg) || null) : null,
             saetze_log: tracked.map(s => ({ wdh: parseInt(s.wdh) || null, kg: parseFloat(s.kg) || null })),
+            notizen: ex.note?.trim() || null,
           }
         })
       if (uebungenRows.length) await supabase.from('uebungen').insert(uebungenRows)
@@ -1305,14 +1348,18 @@ export function Training() {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="section-title text-2xl">Training</h1>
-          <p className="text-text-secondary text-sm mt-0.5">Einheiten & Übungslog</p>
-        </div>
+        {!embedded && (
+          <div>
+            <h1 className="section-title text-2xl">Training</h1>
+            <p className="text-text-secondary text-sm mt-0.5">Einheiten & Übungslog</p>
+          </div>
+        )}
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={() => navigate('/training/vorlagen')} className="btn-secondary flex items-center gap-2">
-            <BookOpen size={16} /> Vorlagen
-          </button>
+          {!embedded && (
+            <button onClick={() => (onOpenVorlagen ? onOpenVorlagen() : navigate('/training?tab=vorlagen'))} className="btn-secondary flex items-center gap-2">
+              <BookOpen size={16} /> Vorlagen
+            </button>
+          )}
           <button onClick={() => { setEditingId(null); setForm({ datum: todayISO(), trainingstyp: 'Kraft', dauer_h: '0', dauer_m: '0', avg_puls: '', kalorien_verbrannt: '', notizen: '' }); setUebungen([]); setPhotoPreview(null); setOpen(true) }} className="btn-secondary flex items-center gap-2">
             <Plus size={18} /> Manuell eintragen
           </button>
@@ -1417,7 +1464,6 @@ export function Training() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-text-primary">{t.trainingstyp ?? 'Training'}</span>
-                  <span className="badge bg-brand/10 text-brand text-xs">{t.einheit_id}</span>
                   <span className="text-xs text-text-muted">{formatDate(t.datum)}</span>
                 </div>
                 <div className="flex items-center gap-4 mt-1 text-xs text-text-secondary">
@@ -1455,10 +1501,16 @@ export function Training() {
                             <span className="text-text-secondary text-xs">{u.saetze}×{u.wdh}{u.gewicht_kg ? ` @ ${u.gewicht_kg}kg` : ''}</span>
                           )}
                         </div>
+                        {u.notizen && (
+                          <p className="mt-1.5 text-xs text-text-secondary flex items-start gap-1.5">
+                            <StickyNote size={12} className="mt-0.5 shrink-0 text-brand" aria-hidden="true" />
+                            <span>{u.notizen}</span>
+                          </p>
+                        )}
                         {satzLog && satzLog.length > 0 && (
                           <div className="mt-1.5 flex flex-wrap gap-1.5">
                             {satzLog.map((s, i) => (
-                              <span key={i} className="text-[11px] bg-bg-base px-2 py-0.5 rounded text-text-secondary">
+                              <span key={i} className="text-[11px] bg-bg px-2 py-0.5 rounded text-text-secondary">
                                 S{i + 1}: {s.wdh ?? '?'}×{s.kg ?? '?'}kg
                               </span>
                             ))}

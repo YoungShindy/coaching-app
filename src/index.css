@@ -144,6 +144,7 @@
   to { opacity: 1; transform: none; }
 }
 @keyframes grow-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes ring-draw {
   from { stroke-dasharray: 0 var(--ring-c); opacity: 0; }
   10% { opacity: 1; }
@@ -166,6 +167,11 @@
 .grow-y {
   transform-origin: bottom;
   animation: grow-y 0.75s var(--ease-out) backwards;
+  animation-delay: calc(var(--d, 0) * 1ms);
+}
+.grow-x {
+  transform-origin: left;
+  animation: grow-x 0.8s var(--ease-out) backwards;
   animation-delay: calc(var(--d, 0) * 1ms);
 }
 .ring-draw {
@@ -195,7 +201,7 @@
 .page > :not([data-enter='manual']) > :nth-child(8) { --i: 7; }
 
 /* Während die Startanimation läuft, warten die Einblendungen darunter (index.html entfernt sp-hold kurz nach dem Durchflug) */
-html.sp-hold :is(#root .enter, #root .grow-y, #root .ring-draw, #root .fade-in, #root .sheet-in, #root .modal-in,
+html.sp-hold :is(#root .enter, #root .grow-y, #root .grow-x, #root .ring-draw, #root .fade-in, #root .sheet-in, #root .modal-in,
   #root .page > :not([data-enter='manual']) > *) { animation-play-state: paused !important; }
 
 /* Themenwechsel: Farben blenden über, statt zu springen */
@@ -209,7 +215,7 @@ html.theme-fade *::after {
 
 @media (prefers-reduced-motion: reduce) {
   .animate-in, .animate-fade-in, .animate-slide-up { animation: none; }
-  .enter, .grow-y, .ring-draw, .fade-in, .fade-out, .sheet-in, .sheet-out, .modal-in,
+  .enter, .grow-y, .grow-x, .ring-draw, .fade-in, .fade-out, .sheet-in, .sheet-out, .modal-in,
   .page > :not([data-enter='manual']) > * { animation: none !important; }
   html.theme-fade, html.theme-fade *, html.theme-fade *::before, html.theme-fade *::after { transition: none !important; }
 }
