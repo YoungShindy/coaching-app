@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Droplets, Minus, Plus, Undo2 } from 'lucide-react'
 import { Avatar, type AvatarHandle } from '../character/Avatar'
 import { DEFAULT_AVATAR, type AvatarConfig } from '../character/avatarConfig'
+import type { Equipped } from '../../lib/game'
 import { cn } from '../../lib/utils'
 
 const BOTTLES = [330, 500, 750, 1000]
@@ -18,7 +19,7 @@ function message(pct: number, restMl: number): string {
 }
 
 /** Dein Charakter trinkt aus der Flasche, der Tank füllt sich mit Wellen. */
-export function WaterCard({ totalMl, goalMl, entries, bottleMl, onBottleChange, onAdd, onRemoveLast, avatar = DEFAULT_AVATAR }: {
+export function WaterCard({ totalMl, goalMl, entries, bottleMl, onBottleChange, onAdd, onRemoveLast, avatar = DEFAULT_AVATAR, equipped }: {
   totalMl: number
   goalMl: number
   entries: number
@@ -27,6 +28,7 @@ export function WaterCard({ totalMl, goalMl, entries, bottleMl, onBottleChange, 
   onAdd: (ml: number) => void
   onRemoveLast: () => void
   avatar?: AvatarConfig
+  equipped?: Equipped
 }) {
   const avatarRef = useRef<AvatarHandle>(null)
   const [shown, setShown] = useState(0)
@@ -72,7 +74,7 @@ export function WaterCard({ totalMl, goalMl, entries, bottleMl, onBottleChange, 
 
       <div className="max-w-md mx-auto w-full space-y-4">
       <div className="flex items-end justify-center gap-3">
-        <Avatar ref={avatarRef} config={avatar} holdBottle bottleMl={bottleMl} size={176} label="Deine Figur trinkt aus der Flasche" />
+        <Avatar ref={avatarRef} config={avatar} equipped={equipped} holdBottle bottleMl={bottleMl} size={176} label="Deine Figur trinkt aus der Flasche" />
 
         {/* Tank */}
         <div className="flex flex-col items-center gap-1.5 pb-1">

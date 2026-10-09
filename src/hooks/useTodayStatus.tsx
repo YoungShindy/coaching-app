@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase, DATA_CHANGED_EVENT } from '../lib/supabase'
-import { todayISO } from '../lib/utils'
+import { todayISO, toLocalISO } from '../lib/utils'
+import type { DayAwardFacts } from '../lib/game'
 import { useAuth } from './useAuth'
 
 // Was heute schon eingetragen ist: steuert die grünen Reiter, Haken und den Zähler am Mehr-Reiter.
@@ -47,45 +48,69 @@ export function statusLabel(key: StatusKey, item: StatusItem): string {
   }
 }
 
-interface Ctx { status: TodayStatus; loaded: boolean; refresh: () => void }
-const TodayStatusContext = createContext<Ctx>({ status: EMPTY_STATUS, loaded: false, refresh: () => {} })
+/** Rohdaten pro Tag (heute und gestern); daraus berechnet das Spiel Erfolge und XP. Das Wasserziel ergänzt das Spiel selbst. */
+export type DayFactsMap = Record<string, Omit<DayAwardFacts, 'waterGoalMl'>>
+
+interface Ctx { status: TodayStatus; loaded: boolean; refresh: () => void; days: DayFactsMap }
+const TodayStatusContext = createContext<Ctx>({ status: EMPTY_STATUS, loaded: false, refresh: () => {}, days: {} })
 
 export function TodayStatusProvider({ children }: { children: React.ReactNode }) {
   const { user, profile } = useAuth()
   const location = useLocation()
   const [status, setStatus] = useState<TodayStatus>(EMPTY_STATUS)
   const [loaded, setLoaded] = useState(false)
+  const [days, setDays] = useState<DayFactsMap>({})
   const timer = useRef<number | undefined>(undefined)
   const isClient = !!user && profile?.role !== 'coach'
 
   const load = useCallback(async () => {
     if (!user || !isClient) return
     const day = todayISO()
-    const today = (table: string, cols: string) =>
-      supabase.from(table).select(cols).eq('user_id', user.id).eq('datum', day)
+    const yd = new Date(); yd.setDate(yd.getDate() - 1)
+    const yesterday = toLocalISO(yd)
+    const both = [day, yesterday]
+    const since = (table: string, cols: string) =>
+      supabase.from(table).select(cols).eq('user_id', user.id).in('datum', both)
     try {
-      const [w, s, t, f, sup, log] = await Promise.all([
-        today('gewicht', 'id').limit(1),
-        today('schlaf', 'id').limit(1),
-        today('training', 'id').limit(1),
-        today('food_log', 'mahlzeit'),
+      const [w, s, t, f, sup, log, wat] = await Promise.all([
+        since('gewicht', 'datum'),
+        since('schlaf', 'datum'),
+        since('training', 'id,datum'),
+        since('food_log', 'mahlzeit,datum'),
         supabase.from('supplements').select('id').eq('user_id', user.id).eq('aktiv', true),
-        today('supplement_log', 'supplement_id,eingenommen'),
+        since('supplement_log', 'supplement_id,eingenommen,datum'),
+        since('wasser_log', 'menge_ml,datum'),
       ])
-      const meals = new Set(((f.data ?? []) as unknown as { mahlzeit: string }[]).map(r => r.mahlzeit))
-      const mainDone = MAIN_MEALS.filter(m => meals.has(m)).length
+      const rows = <T,>(r: { data: unknown }) => (r.data ?? []) as unknown as (T & { datum: string })[]
       const activeIds = new Set(((sup.data ?? []) as unknown as { id: string }[]).map(r => r.id))
-      const taken = new Set(
-        ((log.data ?? []) as unknown as { supplement_id: string; eingenommen: boolean }[])
-          .filter(r => r.eingenommen && activeIds.has(r.supplement_id)).map(r => r.supplement_id),
-      )
+
+      const perDay: DayFactsMap = {}
+      for (const date of both) {
+        const meals = new Set(rows<{ mahlzeit: string }>(f).filter(r => r.datum === date).map(r => r.mahlzeit))
+        const taken = new Set(
+          rows<{ supplement_id: string; eingenommen: boolean }>(log)
+            .filter(r => r.datum === date && r.eingenommen && activeIds.has(r.supplement_id)).map(r => r.supplement_id),
+        )
+        perDay[date] = {
+          date,
+          mealsMain: MAIN_MEALS.filter(m => meals.has(m)),
+          sleep: rows(s).some(r => r.datum === date),
+          weight: rows(w).some(r => r.datum === date),
+          trainingIds: rows<{ id: string }>(t).filter(r => r.datum === date).map(r => r.id),
+          supplementsTotal: activeIds.size,
+          supplementsTaken: taken.size,
+          waterMl: rows<{ menge_ml: number }>(wat).filter(r => r.datum === date).reduce((a, r) => a + (r.menge_ml ?? 0), 0),
+        }
+      }
+      const d = perDay[day]
       setStatus({
-        weight: makeItem(w.data?.length ?? 0, 1),
-        sleep: makeItem(s.data?.length ?? 0, 1),
-        training: makeItem(t.data?.length ?? 0, 1),
-        nutrition: makeItem(mainDone, MAIN_MEALS.length),
-        supplements: makeItem(taken.size, activeIds.size),
+        weight: makeItem(d.weight ? 1 : 0, 1),
+        sleep: makeItem(d.sleep ? 1 : 0, 1),
+        training: makeItem(d.trainingIds.length > 0 ? 1 : 0, 1),
+        nutrition: makeItem(d.mealsMain.length, MAIN_MEALS.length),
+        supplements: makeItem(d.supplementsTaken, d.supplementsTotal),
       })
+      setDays(perDay)
       setLoaded(true)
     } catch { /* Offline oder Fehler: letzten Stand behalten */ }
   }, [user, isClient])
@@ -108,7 +133,7 @@ export function TodayStatusProvider({ children }: { children: React.ReactNode })
     }
   }, [refresh])
 
-  const value = useMemo(() => ({ status: isClient ? status : EMPTY_STATUS, loaded: isClient && loaded, refresh }), [status, loaded, refresh, isClient])
+  const value = useMemo(() => ({ status: isClient ? status : EMPTY_STATUS, loaded: isClient && loaded, refresh, days }), [status, loaded, refresh, isClient, days])
   return <TodayStatusContext.Provider value={value}>{children}</TodayStatusContext.Provider>
 }
 

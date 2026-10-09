@@ -1,5 +1,7 @@
 import { forwardRef, useCallback, useEffect, useId, useImperativeHandle, useLayoutEffect, useRef } from 'react'
 import { DEFAULT_AVATAR, shade, type AvatarConfig } from './avatarConfig'
+import type { Equipped } from '../../lib/game'
+import { BackItem, ClothesFront, FaceItem, HeadItem, NeckItem, PetItem, TORSO_PATH, clothesInfo } from './items'
 
 // Figur mit Kopf und Oberkörper (Mii-ähnlich). Mit `holdBottle` hält sie eine Flasche und kann daraus trinken.
 // Die Bewegung läuft über requestAnimationFrame direkt am SVG: kein Neurendern pro Bild, daher flüssig.
@@ -13,11 +15,17 @@ export interface AvatarHandle {
 
 interface Props {
   config?: AvatarConfig
-  /** Breite in Pixeln, die Höhe folgt (Verhältnis 4:5) */
+  /** Breite in Pixeln, die Höhe folgt (Oberkörper 4:5, Kopf-Ausschnitt etwa 1:1) */
   size?: number
+  /** Ganzer Oberkörper oder nur der Kopf (für kleine Symbole) */
+  view?: 'bust' | 'head'
   holdBottle?: boolean
   /** Größe der gehaltenen Flasche in ml (bestimmt auch die gezeichnete Größe) */
   bottleMl?: number
+  /** Gekaufte Dinge, die die Figur trägt */
+  equipped?: Equipped
+  /** Sanftes Atmen und Blinzeln */
+  idle?: boolean
   className?: string
   label?: string
 }
@@ -187,19 +195,25 @@ function Beard({ style, color, skin }: { style: AvatarConfig['beard']; color: st
 // ─── Hauptkomponente ──────────────────────────────────────────────────────────
 
 export const Avatar = forwardRef<AvatarHandle, Props>(function Avatar(
-  { config = DEFAULT_AVATAR, size = 160, holdBottle = false, bottleMl = 500, className, label = 'Deine Figur' }, ref,
+  { config = DEFAULT_AVATAR, size = 160, view = 'bust', holdBottle = false, bottleMl = 500, equipped, idle = false, className, label = 'Deine Figur' }, ref,
 ) {
   const c = config
   const uid = useId().replace(/:/g, '')
   const scale = bottleScale(bottleMl)
   const skinShade = shade(c.skin, 0.13)
-  const sleeve = c.shirt
+  const eq = equipped ?? {}
+  const box = view === 'head' ? { x: 22, y: 14, w: 156, h: 150 } : { x: 0, y: 0, w: 200, h: 250 }
+  const info = clothesInfo(eq.kleidung, c.shirt, c.skin)
+  const sleeve = info.sleeve
+  // Lange Ärmel (Hoodie, Jacke, Anzug) bedecken auch den Unterarm
+  const foreColor = eq.kleidung && eq.kleidung !== 'tank' ? info.sleeve : c.skin
 
   const el = useRef<Record<string, SVGElement | null>>({})
   const reg = (k: string) => (node: SVGElement | null) => { el.current[k] = node }
   const raf = useRef<number | undefined>(undefined)
   const busy = useRef<Promise<void>>(Promise.resolve())
   const reduced = useRef(false)
+  const animating = useRef(false)
   const base = useRef({ holdBottle, scale })
   base.current = { holdBottle, scale }
 
@@ -245,14 +259,30 @@ export const Avatar = forwardRef<AvatarHandle, Props>(function Avatar(
 
   const run = useCallback((duration: number, frame: (t: number) => void) => new Promise<void>(resolve => {
     const t0 = performance.now()
+    animating.current = true
     const tick = (now: number) => {
       const t = clamp01((now - t0) / duration)
       frame(t)
       if (t < 1) raf.current = requestAnimationFrame(tick)
-      else resolve()
+      else { animating.current = false; resolve() }
     }
     raf.current = requestAnimationFrame(tick)
   }), [])
+
+  // Blinzeln im Ruhezustand
+  useEffect(() => {
+    if (!idle) return
+    let timer: number
+    const blink = () => {
+      if (!reduced.current && !animating.current) {
+        set('eyesOpen', 'opacity', 0); set('eyesClosed', 'opacity', 1)
+        window.setTimeout(() => { if (!animating.current) { set('eyesOpen', 'opacity', 1); set('eyesClosed', 'opacity', 0) } }, 140)
+      }
+      timer = window.setTimeout(blink, 2600 + Math.random() * 3200)
+    }
+    timer = window.setTimeout(blink, 1800 + Math.random() * 2000)
+    return () => window.clearTimeout(timer)
+  }, [idle])
 
   const mouthPoint = useCallback((phi: number) => {
     const tip = 43 * base.current.scale
@@ -312,20 +342,24 @@ export const Avatar = forwardRef<AvatarHandle, Props>(function Avatar(
   const bolt = 'M104 196 L92 212 L100 212 L96 226 L110 208 L102 208 Z'
 
   return (
-    <svg viewBox="0 0 200 250" width={size} height={size * 1.25} className={className} role="img" aria-label={label}>
+    <svg viewBox={`${box.x} ${box.y} ${box.w} ${box.h}`} width={size} height={(size * box.h) / box.w} className={className} role="img" aria-label={label}>
       <defs>
         <clipPath id={`${uid}-bottle`}><path d={BOTTLE_BODY} /></clipPath>
       </defs>
 
+      <g className={idle ? 'avatar-bob' : undefined}>
       <g ref={reg('body')}>
+        <BackItem clothes={eq.kleidung} shirt={c.shirt} />
         <BackHair c={c} />
 
         {/* Oberkörper */}
-        <path d="M10 250 L10 222 C10 198 40 182 84 178 L116 178 C160 182 190 198 190 222 L190 250 Z" fill={c.shirt} />
-        <path d="M44 190 C30 204 24 228 26 250 L56 250 C54 228 56 208 62 194 Z" fill={shade(c.shirt, 0.16)} />
-        <path d={bolt} fill="#fff" opacity="0.85" />
+        {eq.kleidung ? <ClothesFront clothes={eq.kleidung} shirt={c.shirt} skin={c.skin} /> : <path d={TORSO_PATH} fill={c.shirt} />}
+        <path d="M44 190 C30 204 24 228 26 250 L56 250 C54 228 56 208 62 194 Z" fill={info.leftSleeve} />
+        {!eq.kleidung && <path d={bolt} fill="#fff" opacity="0.85" />}
         <rect x="87" y="136" width="26" height="46" rx="10" fill={skinShade} />
         <path d="M84 178 Q100 198 116 178 Q100 184 84 178 Z" fill={skinShade} />
+        <NeckItem item={eq.hals} />
+        <PetItem item={eq.tier} />
 
         {/* Kopf */}
         <g ref={reg('head')}>
@@ -339,6 +373,8 @@ export const Avatar = forwardRef<AvatarHandle, Props>(function Avatar(
           <g ref={reg('eyesClosed')} opacity="0"><Eyes style={c.eyes} closed /></g>
           <Brows style={c.brows} color={c.hairStyle === 'bald' ? shade(c.skin, 0.4) : c.hairColor} />
           <FrontHair c={c} />
+          <FaceItem item={eq.brille} />
+          <HeadItem item={eq.kopf} />
         </g>
 
         {/* Schluck am Hals */}
@@ -353,7 +389,7 @@ export const Avatar = forwardRef<AvatarHandle, Props>(function Avatar(
 
         {/* Rechter Arm mit Flasche */}
         <line ref={reg('upper')} x1="156" y1="186" x2="175" y2="214" stroke={sleeve} strokeWidth="21" strokeLinecap="round" />
-        <line ref={reg('fore')} x1="175" y1="214" x2="140" y2="208" stroke={c.skin} strokeWidth="14" strokeLinecap="round" />
+        <line ref={reg('fore')} x1="175" y1="214" x2="140" y2="208" stroke={foreColor} strokeWidth={foreColor === c.skin ? 14 : 19} strokeLinecap="round" />
         <g ref={reg('bottle')} transform={`translate(${IDLE_HAND.x} ${IDLE_HAND.y}) scale(${scale})`}>
           <path d={BOTTLE_BODY} fill="#dcecf6" fillOpacity="0.55" />
           <g clipPath={`url(#${uid}-bottle)`}>
@@ -367,6 +403,7 @@ export const Avatar = forwardRef<AvatarHandle, Props>(function Avatar(
           <path d="M-8 -20 L-8 14" stroke="#fff" strokeOpacity="0.55" strokeWidth="2.2" strokeLinecap="round" />
         </g>
         <circle ref={reg('hand')} cx={IDLE_HAND.x} cy={IDLE_HAND.y} r="9" fill={c.skin} />
+      </g>
       </g>
     </svg>
   )

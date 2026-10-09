@@ -9,6 +9,7 @@ import { useTheme } from '../hooks/useTheme'
 import { todayISO, toLocalISO, tokenColor } from '../lib/utils'
 import { Spinner } from '../components/ui/Spinner'
 import { WaterCard } from '../components/water/WaterCard'
+import { useGame } from '../hooks/useGame'
 import type { FoodLogItem, WasserLogEntry, Rezept } from '../types/database'
 
 // ─── Local types ──────────────────────────────────────────────────────────────
@@ -1232,6 +1233,7 @@ function MealSection({ meal, items, onAdd, onDelete }: {
 
 export function Nutrition() {
   const { user } = useAuth()
+  const { character } = useGame()
   const [date, setDate] = useState(todayISO())
   const [tab, setTab] = useState<'ernaehrung' | 'bilanz'>('ernaehrung')
   const [items, setItems] = useState<FoodLogItem[]>([])
@@ -1425,6 +1427,8 @@ export function Nutrition() {
             onBottleChange={handleBottleChange}
             onAdd={handleAddWater}
             onRemoveLast={handleRemoveLastWater}
+            avatar={character?.config}
+            equipped={character?.equipped}
           />
         </>
       ) : (

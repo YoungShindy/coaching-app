@@ -8,3 +8,7 @@ export const isColumnError = (err: { message?: string; code?: string } | null | 
 export function withoutKeys<T extends Record<string, unknown>>(row: T, keys: string[]): Record<string, unknown> {
   return Object.fromEntries(Object.entries(row).filter(([k]) => !keys.includes(k)))
 }
+
+/** Fehlt die Tabelle noch (Datenbank-Update nicht eingespielt)? */
+export const isMissingTable = (err: { message?: string; code?: string } | null | undefined) =>
+  !!err && (/42P01|PGRST205|does not exist|schema cache/i.test(`${err.code ?? ''} ${err.message ?? ''}`) || isColumnError(err))

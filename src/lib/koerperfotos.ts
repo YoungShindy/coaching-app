@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { isColumnError } from './dbCompat'
+import { isMissingTable } from './dbCompat'
 
 // Körperfotos: mehrere pro Tag, frei beschriftet. Alte Fotos aus gewicht.foto_url werden mit angezeigt.
 
@@ -10,10 +10,6 @@ export const DEFAULT_LABEL = 'Foto'
 import type { BodyPhoto } from './photoCompare'
 export { compare, dayNumber, daysBetween, shiftISO } from './photoCompare'
 export type { BodyPhoto, CompareSpan, Comparison } from './photoCompare'
-
-/** Fehlt die Tabelle noch (Migration nicht eingespielt)? */
-export const isMissingTable = (err: { message?: string; code?: string } | null | undefined) =>
-  !!err && (/42P01|PGRST205|does not exist|schema cache/i.test(`${err.code ?? ''} ${err.message ?? ''}`) || isColumnError(err))
 
 function pathFromUrl(url: string): string | null {
   const i = url.indexOf(`/${BUCKET}/`)

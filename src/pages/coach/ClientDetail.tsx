@@ -8,6 +8,9 @@ import { formatDate, calcSleepHours } from '../../lib/utils'
 import { Spinner } from '../../components/ui/Spinner'
 import type { Profile, GewichtEntry, TrainingEntry, SchlafEntry, ErnaehrungEntry, ClientSettings, CoachPlan } from '../../types/database'
 import { HaushaltTab } from './HaushaltTab'
+import { GameTab, useClientGame } from './GameTab'
+import { Avatar } from '../../components/character/Avatar'
+import { levelInfo } from '../../lib/game'
 import { useTheme } from '../../hooks/useTheme'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 
@@ -472,7 +475,8 @@ export function ClientDetail() {
   const [foodLog, setFoodLog] = useState<{ id: string; datum: string; name: string; kalorien: number | null; protein_g: number | null; kohlenhydrate_g: number | null; fett_g: number | null }[]>([])
   const [uebungenMap, setUebungenMap] = useState<Record<string, { id: string; uebungsname: string; saetze: number | null; wdh: number | null; gewicht_kg: number | null; saetze_log: { wdh: number | null; kg: number | null }[] | null; notizen?: string | null }[]>>({})
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'overview' | 'anamnese' | 'weight' | 'training' | 'sleep' | 'nutrition' | 'masterplan' | 'haushalt'>('overview')
+  const [tab, setTab] = useState<'overview' | 'anamnese' | 'weight' | 'training' | 'sleep' | 'nutrition' | 'masterplan' | 'haushalt' | 'figur'>('overview')
+  const game = useClientGame(clientId)
   const [notizen, setNotizen] = useState('')
   const [notizenSaving, setNotizenSaving] = useState(false)
   const [selectedTrainingId, setSelectedTrainingId] = useState<string | null>(null)
@@ -550,6 +554,7 @@ export function ClientDetail() {
     { id: 'nutrition', label: 'Ernährung' },
     { id: 'masterplan', label: 'Masterplan' },
     { id: 'haushalt', label: 'Haushalt' },
+    { id: 'figur', label: 'Figur & Challenges' },
   ] as const
 
   if (loading) return <div className="flex justify-center py-20"><Spinner size={36} /></div>
@@ -564,9 +569,19 @@ export function ClientDetail() {
       {/* Client Header */}
       <div className="card">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-brand/20 border border-brand/30 flex items-center justify-center text-brand font-bold text-2xl shrink-0">
-            {client?.name?.charAt(0)?.toUpperCase() ?? '?'}
-          </div>
+          {game.name ? (
+            <button
+              onClick={() => setTab('figur')} aria-label={`${game.name}, Level ${levelInfo(game.xp).level}. Figur ansehen`}
+              className="relative shrink-0 rounded-2xl bg-brand/10 border border-brand/30 transition-transform active:scale-95"
+            >
+              <Avatar view="head" config={game.config} equipped={game.equipped} size={64} label="" />
+              <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-0.5 rounded-full bg-primary text-white text-[10px] font-extrabold ring-2 ring-bg-card tabular-nums">Level {levelInfo(game.xp).level}</span>
+            </button>
+          ) : (
+            <div className="w-16 h-16 rounded-2xl bg-brand/20 border border-brand/30 flex items-center justify-center text-brand font-bold text-2xl shrink-0">
+              {client?.name?.charAt(0)?.toUpperCase() ?? '?'}
+            </div>
+          )}
           <div>
             <h1 className="text-xl font-bold text-text-primary">{client?.name ?? 'Unbekannt'}</h1>
             <div className="text-text-secondary text-sm">{client?.email}</div>
@@ -1015,6 +1030,10 @@ export function ClientDetail() {
 
       {tab === 'haushalt' && clientId && (
         <HaushaltTab clientId={clientId} clientName={client?.name ?? 'Klient'} />
+      )}
+
+      {tab === 'figur' && clientId && (
+        <GameTab clientId={clientId} clientName={client?.name?.split(' ')[0] ?? 'Klient'} game={game} />
       )}
     </div>
   )

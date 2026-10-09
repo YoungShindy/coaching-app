@@ -1,7 +1,7 @@
-export function Spinner({ size = 24 }: { size?: number }) {
+export function Spinner({ size = 24, className = 'text-brand' }: { size?: number; className?: string }) {
   return (
     <svg
-      className="animate-spin text-brand"
+      className={`animate-spin ${className}`}
       xmlns="http://www.w3.org/2000/svg"
       width={size}
       height={size}

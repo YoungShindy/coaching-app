@@ -18,6 +18,7 @@ import { ClientDetail } from './pages/coach/ClientDetail'
 import { Rezepte } from './pages/Rezepte'
 import { Legal } from './pages/Legal'
 import { More } from './pages/More'
+import { Character } from './pages/Character'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -73,6 +74,7 @@ function AppRoutes() {
       <Route path="/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
       <Route path="/more" element={<ProtectedRoute><More /></ProtectedRoute>} />
+      <Route path="/charakter" element={<ProtectedRoute>{profile?.role === 'coach' ? <Navigate to="/coach" replace /> : <Character />}</ProtectedRoute>} />
 
       {/* Coach Only */}
       <Route path="/coach" element={<ProtectedRoute><CoachRoute><CoachDashboard /></CoachRoute></ProtectedRoute>} />

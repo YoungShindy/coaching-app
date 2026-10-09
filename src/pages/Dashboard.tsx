@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { addDays, startOfWeek, subDays } from 'date-fns'
 import { Scale, Dumbbell, Moon, TrendingUp, TrendingDown, Target, Flame, FileText, X, Calendar as CalendarIcon, Check, ChevronRight, Users, Clock } from 'lucide-react'
@@ -9,6 +9,11 @@ import { useCountUpText } from '../hooks/useCountUp'
 import { formatDate, calcSleepHours, calcStreak, toLocalISO, todayISO } from '../lib/utils'
 import type { CoachPlan, KalenderEvent, TrainingEntry } from '../types/database'
 import { Anamnese } from './Anamnese'
+import { Avatar } from '../components/character/Avatar'
+import { CharacterOffer } from '../components/character/CharacterOffer'
+import { Onboarding } from '../components/character/Onboarding'
+import { Spinner } from '../components/ui/Spinner'
+import { useGame } from '../hooks/useGame'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart,
 } from 'recharts'
@@ -208,6 +213,17 @@ export function Dashboard() {
   const [masterplan, setMasterplan] = useState<CoachPlan | null>(null)
   const [showBanner, setShowBanner] = useState(false)
   const [showAnamnese, setShowAnamnese] = useState(false)
+  const [anamneseDone, setAnamneseDone] = useState(false)
+  const game = useGame()
+  const [gameGaveUp, setGameGaveUp] = useState(false)
+  // Das Onboarding bleibt bis zur Abschlussseite stehen, auch wenn die Figur dabei schon angelegt wird
+  const onboarding = useRef(false)
+  useEffect(() => {
+    // Falls die Spieldaten nicht laden, geht es nach kurzer Zeit ohne Figur weiter
+    if (!showAnamnese || game.loaded) return
+    const t = window.setTimeout(() => setGameGaveUp(true), 3500)
+    return () => window.clearTimeout(t)
+  }, [showAnamnese, game.loaded])
 
   useEffect(() => {
     if (!user) return
@@ -233,6 +249,7 @@ export function Dashboard() {
         try {
           const note = settings.ernaehrungs_notizen ? JSON.parse(settings.ernaehrungs_notizen) : {}
           if (!note.anamnese_done) setShowAnamnese(true)
+          else setAnamneseDone(true)
         } catch { setShowAnamnese(true) }
       }
       if (planRes.data) {
@@ -313,6 +330,10 @@ export function Dashboard() {
   }
 
   if (showAnamnese && user && profile?.role === 'client') {
+    // Neue Konten: Kennenlernen, Anamnese, Figur. Fehlt das Spiel (noch), bleibt es bei der Anamnese.
+    if (!game.loaded && !gameGaveUp) return <div className="flex justify-center py-24"><Spinner size={32} /></div>
+    if (game.available && !game.character) onboarding.current = true
+    if (onboarding.current) return <Onboarding withAnamnese onDone={() => { onboarding.current = false; setShowAnamnese(false) }} />
     return <Anamnese userId={user.id} onDone={() => setShowAnamnese(false)} />
   }
 
@@ -342,9 +363,15 @@ export function Dashboard() {
           </span>
         </div>
         <Link to="/settings" style={d(90)} className="enter relative shrink-0 transition-transform active:scale-95" aria-label={`Profil und Einstellungen${today.streak > 0 ? `, ${today.streak} Tage Streak` : ''}`}>
-          <span className="w-14 h-14 rounded-full bg-bg-card border-2 border-border-light flex items-center justify-center text-xl font-bold text-brand shadow-card">
-            {initial}
-          </span>
+          {game.character ? (
+            <span className="block rounded-full bg-bg-card border-2 border-border-light shadow-card overflow-hidden w-16 h-16">
+              <Avatar view="head" config={game.character.config} equipped={game.character.equipped} size={64} idle label="" />
+            </span>
+          ) : (
+            <span className="w-14 h-14 rounded-full bg-bg-card border-2 border-border-light flex items-center justify-center text-xl font-bold text-brand shadow-card">
+              {initial}
+            </span>
+          )}
           {today.streak > 0 && (
             <span className="absolute -top-2 -right-2 inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-primary text-white text-xs font-bold ring-2 ring-bg border border-brand/40">
               <Flame size={11} aria-hidden="true" /> <CountText value={today.streak} format={fmtInt} delay={320} />
@@ -550,6 +577,7 @@ export function Dashboard() {
           )}
         </div>
       </div>
+      {anamneseDone && <CharacterOffer />}
     </div>
   )
 }

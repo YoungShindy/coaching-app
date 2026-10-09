@@ -3,6 +3,8 @@ import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
 import { LogOut, Plus, X, Zap } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { TodayStatusProvider, ROUTE_STATUS, statusLabel, useTodayStatus, type StatusItem } from '../hooks/useTodayStatus'
+import { GameProvider } from '../hooks/useGame'
+import { Celebrations } from './character/Celebrations'
 import { StatusBadge } from './ui/StatusBadge'
 import { cn } from '../lib/utils'
 import {
@@ -12,7 +14,10 @@ import {
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <TodayStatusProvider>
-      <LayoutInner>{children}</LayoutInner>
+      <GameProvider>
+        <LayoutInner>{children}</LayoutInner>
+        <Celebrations />
+      </GameProvider>
     </TodayStatusProvider>
   )
 }
