@@ -210,7 +210,7 @@ export function Sleep() {
                         <QualityStars value={e.schlafqualitaet} />
                       </td>
                       <td className="py-2.5 px-3 text-right">
-                        <button onClick={() => handleDelete(e.id)} className="p-1.5 rounded hover:bg-danger/10 hover:text-danger text-text-muted transition-colors">
+                        <button onClick={() => handleDelete(e.id)} aria-label={`Eintrag vom ${formatDate(e.datum)} löschen`} className="p-1.5 rounded hover:bg-danger/10 hover:text-danger text-text-muted transition-colors">
                           <Trash2 size={14} />
                         </button>
                       </td>

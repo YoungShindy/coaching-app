@@ -23,6 +23,8 @@ export function Training() {
   const tab: Tab = TABS.some(t => t.key === raw) ? (raw as Tab) : 'einheiten'
   const mode: Mode = params.get('mode') === 'plan' ? 'plan' : 'pool'
 
+  const startVorlage = params.get('start') ?? undefined
+
   const go = (next: Tab, nextMode?: Mode) => {
     const p = new URLSearchParams()
     if (next !== 'einheiten') p.set('tab', next)
@@ -40,7 +42,12 @@ export function Training() {
       <SegmentTabs tabs={TABS} value={tab} onChange={k => go(k)} label="Trainingsbereich" />
 
       <div key={tab} className="enter" style={{ '--d': 0 } as React.CSSProperties}>
-        {tab === 'einheiten' && <TrainingLog embedded onOpenVorlagen={() => go('vorlagen')} />}
+        {tab === 'einheiten' && (
+          <TrainingLog
+            embedded onOpenVorlagen={() => go('vorlagen')}
+            startVorlageId={startVorlage} onStartHandled={() => setParams(new URLSearchParams(), { replace: true })}
+          />
+        )}
         {tab === 'vorlagen' && <TrainingVorlagen embedded onBuildPlan={() => go('uebungen', 'plan')} />}
         {tab === 'uebungen' && (
           <div className="space-y-4">

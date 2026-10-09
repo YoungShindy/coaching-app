@@ -49,6 +49,11 @@ export interface Database {
           notif_reminder_time: string | null
           notif_appointments: boolean | null
           notif_appointment_minutes: number | null
+          timezone?: string | null
+          notif_praise?: boolean | null
+          notif_streak?: boolean | null
+          notif_water?: boolean | null
+          notif_max_per_day?: number | null
           ernaehrungs_notizen: string | null
           coach_foto_freigabe: boolean | null
           consent_dsgvo: boolean | null
@@ -174,6 +179,9 @@ export interface Database {
           dauer_min: number | null
           typ: 'coaching' | 'training' | 'sonstiges'
           notizen: string | null
+          vorlage_id?: string | null
+          erinnerung_min?: number | null
+          created_by?: string | null
           created_at: string
         }
         Insert: Omit<Database['public']['Tables']['kalender_events']['Row'], 'id' | 'created_at'>

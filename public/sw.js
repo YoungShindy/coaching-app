@@ -28,13 +28,15 @@ self.addEventListener('fetch', (e) => {
 })
 
 self.addEventListener('push', (e) => {
-  if (!e.data) return
-  const data = e.data.json()
+  // Safari/iOS verlangt, dass jede Push-Nachricht auch angezeigt wird, sonst entzieht es die Erlaubnis.
+  let data = {}
+  try { data = e.data ? e.data.json() : {} } catch { data = { body: e.data ? e.data.text() : '' } }
   e.waitUntil(
     self.registration.showNotification(data.title || 'HLX Together', {
       body: data.body || '',
       icon: BASE + '/icon-192.png',
       badge: BASE + '/icon-192.png',
+      tag: data.tag || undefined,
       data: { url: data.url || BASE + '/' },
       vibrate: [200, 100, 200],
     })
@@ -47,7 +49,11 @@ self.addEventListener('notificationclick', (e) => {
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
       const existing = list.find(c => c.url.includes(BASE))
-      if (existing) return existing.focus()
+      if (existing) {
+        // Offene App nach vorn holen und zur richtigen Seite schicken (navigate() gibt es nicht überall)
+        existing.postMessage({ type: 'hlx-navigate', url })
+        return existing.focus()
+      }
       return clients.openWindow(url)
     })
   )

@@ -5,9 +5,11 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { bmi, bmiCategory, generateCode, berechneTDEE, type TDEEResult } from '../lib/utils'
 import { Spinner } from '../components/ui/Spinner'
-import { subscribeToPush } from '../hooks/usePushNotifications'
+import { NotificationSettings } from '../components/settings/NotificationSettings'
 import { useTheme, type Theme } from '../hooks/useTheme'
 import type { ClientSettings, InviteCode, CoachPlan } from '../types/database'
+
+const NEW_NOTIF_COLUMNS = ['timezone', 'notif_praise', 'notif_streak', 'notif_water', 'notif_max_per_day']
 
 export function Settings() {
   const { user, profile, refreshProfile } = useAuth()
@@ -18,7 +20,6 @@ export function Settings() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [name, setName] = useState(profile?.name ?? '')
-  const [notifStatus, setNotifStatus] = useState<'idle'|'loading'|'ok'|'denied'|'unsupported'>('idle')
   const [deletingAccount, setDeletingAccount] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [tdeePreview, setTdeePreview] = useState<TDEEResult | null>(null)
@@ -47,10 +48,15 @@ export function Settings() {
   async function handleSave() {
     if (!user) return
     setSaving(true)
-    await Promise.all([
+    const [, res] = await Promise.all([
       supabase.from('profiles').update({ name }).eq('id', user.id),
       supabase.from('client_settings').upsert({ ...settings, user_id: user.id }, { onConflict: 'user_id' }),
     ])
+    if (res.error && /column|schema cache/i.test(res.error.message)) {
+      // Datenbank ohne das Benachrichtigungs-Update: Rest der Einstellungen trotzdem speichern
+      const rest = Object.fromEntries(Object.entries(settings).filter(([k]) => !NEW_NOTIF_COLUMNS.includes(k)))
+      await supabase.from('client_settings').upsert({ ...rest, user_id: user.id }, { onConflict: 'user_id' })
+    }
     await refreshProfile()
     setSaving(false)
     setSaved(true)
@@ -79,19 +85,6 @@ export function Settings() {
       expires_at: expiresAt.toISOString(),
     })
     await load()
-  }
-
-  async function activateNotifications() {
-    if (!user) return
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      setNotifStatus('unsupported')
-      return
-    }
-    setNotifStatus('loading')
-    const perm = await Notification.requestPermission()
-    if (perm !== 'granted') { setNotifStatus('denied'); return }
-    await subscribeToPush(user.id)
-    setNotifStatus('ok')
   }
 
   async function deleteCode(id: string) {
@@ -146,7 +139,7 @@ export function Settings() {
         </div>
         <div>
           <label className="label">E-Mail</label>
-          <input type="email" className="input opacity-60 cursor-not-allowed" value={user?.email ?? ''} disabled />
+          <input type="email" aria-label="E-Mail-Adresse" className="input opacity-60 cursor-not-allowed" value={user?.email ?? ''} disabled />
         </div>
         <div>
           <label className="label">Rolle</label>
@@ -217,7 +210,7 @@ export function Settings() {
             </div>
             <div>
               <label className="label">Startdatum Coaching</label>
-              <input type="date" className="input" value={settings.startdatum ?? ''} onChange={e => setSettings(s => ({ ...s, startdatum: e.target.value }))} />
+              <input type="date" aria-label="Startdatum" className="input" value={settings.startdatum ?? ''} onChange={e => setSettings(s => ({ ...s, startdatum: e.target.value }))} />
             </div>
           </div>
 
@@ -464,68 +457,12 @@ export function Settings() {
       )}
 
       {/* Notification Settings */}
-      <div className="card space-y-4">
-        <h2 className="font-semibold text-text-primary flex items-center gap-2">
-          <Bell size={18} className="text-brand" /> Benachrichtigungen
-        </h2>
-
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-medium text-text-primary">Tägliche Erinnerung</div>
-            <div className="text-xs text-text-muted">Erinnert dich, Ernährung, Training & Schlaf einzutragen</div>
-          </div>
-          <button
-            onClick={() => setSettings(s => ({ ...s, notif_daily_reminder: !s.notif_daily_reminder }))}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings.notif_daily_reminder ? 'bg-primary ring-1 ring-brand/40' : 'bg-border-input'}`}
-          >
-            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings.notif_daily_reminder ? 'translate-x-6' : 'translate-x-1'}`} />
-          </button>
-        </div>
-
-        {settings.notif_daily_reminder && (
-          <div>
-            <label className="label">Uhrzeit der täglichen Erinnerung</label>
-            <input
-              type="time"
-              className="input"
-              value={settings.notif_reminder_time ?? '20:00'}
-              onChange={e => setSettings(s => ({ ...s, notif_reminder_time: e.target.value }))}
-            />
-            <p className="text-xs text-text-muted mt-1">Hinweis: Zeiten werden in UTC gespeichert. CET = UTC+1, CEST = UTC+2</p>
-          </div>
-        )}
-
-        <div className="border-t border-border pt-4 flex items-center justify-between">
-          <div>
-            <div className="text-sm font-medium text-text-primary">Termin-Erinnerungen</div>
-            <div className="text-xs text-text-muted">Benachrichtigung 1 Stunde vor jedem Termin</div>
-          </div>
-          <button
-            onClick={() => setSettings(s => ({ ...s, notif_appointments: !s.notif_appointments }))}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings.notif_appointments !== false ? 'bg-primary ring-1 ring-brand/40' : 'bg-border-input'}`}
-          >
-            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings.notif_appointments !== false ? 'translate-x-6' : 'translate-x-1'}`} />
-          </button>
-        </div>
-
-        <div className="border-t border-border pt-4">
-          <div className="text-sm font-medium text-text-primary mb-2">Push-Benachrichtigungen aktivieren</div>
-          <div className="text-xs text-text-muted mb-3">
-            {notifStatus === 'ok' && '✅ Benachrichtigungen sind aktiviert'}
-            {notifStatus === 'denied' && '❌ Berechtigung verweigert — bitte in Browser-Einstellungen erlauben'}
-            {notifStatus === 'unsupported' && '⚠️ Dein Browser unterstützt keine Push-Benachrichtigungen'}
-            {(notifStatus === 'idle' || notifStatus === 'loading') && 'Klicke um Benachrichtigungen zu erlauben. Auf iPhone muss die App zuerst zum Homescreen hinzugefügt werden.'}
-          </div>
-          <button
-            onClick={activateNotifications}
-            disabled={notifStatus === 'loading' || notifStatus === 'ok'}
-            className="btn-primary flex items-center gap-2 text-sm"
-          >
-            {notifStatus === 'loading' ? <Spinner size={16} /> : notifStatus === 'ok' ? <CheckCircle size={16} /> : <Bell size={16} />}
-            {notifStatus === 'ok' ? 'Aktiviert' : notifStatus === 'loading' ? 'Wird aktiviert...' : 'Benachrichtigungen aktivieren'}
-          </button>
-        </div>
-      </div>
+      {user && (
+        <NotificationSettings
+          userId={user.id} isCoach={isCoach} settings={settings}
+          onPatch={p => setSettings(s => ({ ...s, ...p }))}
+        />
+      )}
 
       {/* Save Button */}
       <button

@@ -985,7 +985,13 @@ function ActiveWorkoutView({ workout, onFinish, onAbort }: {
 }
 
 
-export function TrainingLog({ embedded = false, onOpenVorlagen }: { embedded?: boolean; onOpenVorlagen?: () => void }) {
+export function TrainingLog({ embedded = false, onOpenVorlagen, startVorlageId, onStartHandled }: {
+  embedded?: boolean
+  onOpenVorlagen?: () => void
+  /** Aus dem Kalender: Workout dieser Vorlage direkt starten */
+  startVorlageId?: string
+  onStartHandled?: () => void
+}) {
   const { user } = useAuth()
   const { colors } = useTheme()
   const navigate = useNavigate()
@@ -998,6 +1004,8 @@ export function TrainingLog({ embedded = false, onOpenVorlagen }: { embedded?: b
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [vorlagen, setVorlagen] = useState<any[]>([])
+  const [vorlagenLoaded, setVorlagenLoaded] = useState(false)
+  const startedFor = useRef<string | null>(null)
   const [selectedVorlage, setSelectedVorlage] = useState('')
   const [activeWorkout, setActiveWorkout] = useState<ActiveWorkoutState | null>(null)
   const [savedWorkout, setSavedWorkout] = useState<ActiveWorkoutState | null>(null)
@@ -1028,7 +1036,7 @@ export function TrainingLog({ embedded = false, onOpenVorlagen }: { embedded?: b
   async function loadVorlagen() {
     if (!user) return
     const { data: vData } = await supabase.from('training_vorlagen').select('*').eq('user_id', user.id)
-    if (!vData?.length) return
+    if (!vData?.length) { setVorlagenLoaded(true); return }
     const { data: uData } = await supabase.from('vorlagen_uebungen').select('*').in('vorlage_id', vData.map((v: any) => v.id)).order('reihenfolge')
     const uMap = (uData ?? []).reduce<Record<string, any[]>>((acc, u: any) => {
       if (!acc[u.vorlage_id]) acc[u.vorlage_id] = []
@@ -1036,6 +1044,7 @@ export function TrainingLog({ embedded = false, onOpenVorlagen }: { embedded?: b
       return acc
     }, {})
     setVorlagen(vData.map((v: any) => ({ ...v, uebungen: uMap[v.id] ?? [] })))
+    setVorlagenLoaded(true)
   }
 
   function applyVorlage(vorlageId: string) {
@@ -1096,6 +1105,15 @@ export function TrainingLog({ embedded = false, onOpenVorlagen }: { embedded?: b
     setSavedWorkout(null)
     setActiveWorkout({ vorlage, startTime: Date.now(), exercises })
   }
+
+  // Vom Kalender geöffnet (?start=<Vorlage>): Workout sofort starten
+  useEffect(() => {
+    if (!startVorlageId || !vorlagenLoaded || startedFor.current === startVorlageId) return
+    startedFor.current = startVorlageId
+    const v = vorlagen.find(x => x.id === startVorlageId)
+    if (v) void startWorkout(v)
+    onStartHandled?.()
+  }, [startVorlageId, vorlagenLoaded, vorlagen])
 
   async function finishWorkout(exercises: ActiveExercise[], elapsedMin: number) {
     if (!user || !activeWorkout) return

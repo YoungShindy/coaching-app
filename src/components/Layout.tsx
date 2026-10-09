@@ -2,13 +2,24 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
 import { LogOut, Plus, X, Zap } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import { TodayStatusProvider, ROUTE_STATUS, statusLabel, useTodayStatus, type StatusItem } from '../hooks/useTodayStatus'
+import { StatusBadge } from './ui/StatusBadge'
 import { cn } from '../lib/utils'
 import {
   clientNav, coachNav, clientTabs, coachTabs, moreItems, quickActions, type NavItem,
 } from '../lib/navigation'
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  return (
+    <TodayStatusProvider>
+      <LayoutInner>{children}</LayoutInner>
+    </TodayStatusProvider>
+  )
+}
+
+function LayoutInner({ children }: { children: React.ReactNode }) {
   const { profile, signOut } = useAuth()
+  const { status } = useTodayStatus()
   const navigate = useNavigate()
   const location = useLocation()
   const [quickOpen, setQuickOpen] = useState(false)
@@ -20,6 +31,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const nav = isCoach ? coachNav : clientNav
   const tabs = isCoach ? coachTabs : clientTabs
   const moreRoutes = moreItems(nav, tabs).map(i => i.to)
+
+  // Zähler am Mehr-Reiter: wie viele der dort liegenden Tagesaufgaben sind heute erledigt?
+  const moreTracked = isCoach ? [] : moreRoutes.map(r => ROUTE_STATUS[r]).filter(Boolean).map(k => status[k]).filter(i => i.total > 0)
+  const moreDone = moreTracked.filter(i => i.level === 'done').length
 
   // Sheet gleitet beim Schließen nach unten weg, erst danach wird es entfernt
   const closeQuick = useCallback(() => {
@@ -54,16 +69,41 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const TabLink = ({ to, icon: Icon, label }: NavItem) => {
     const active = to === '/more' ? isMoreActive(to) : location.pathname.startsWith(to)
+    const key = ROUTE_STATUS[to]
+    const item: StatusItem | undefined = key && !isCoach ? status[key] : undefined
+    const isMore = to === '/more'
+    const allDone = isMore && moreTracked.length > 0 && moreDone === moreTracked.length
+    const touched = item ? item.level !== 'none' : isMore ? moreDone > 0 : false
+    const tone = allDone || touched ? 'text-success' : active ? 'text-brand' : 'text-text-muted hover:text-text-primary'
+    const hint = item && key ? `, ${statusLabel(key, item)}` : isMore && moreTracked.length ? `, ${moreDone} von ${moreTracked.length} Tagesaufgaben erledigt` : ''
     return (
       <Link
         to={to}
         aria-current={active ? 'page' : undefined}
+        aria-label={`${label}${hint}`}
         className={cn(
           'flex flex-col items-center justify-center gap-1 py-2 rounded-2xl text-[11px] font-semibold transition-all duration-200 active:scale-95',
-          active ? 'text-brand' : 'text-text-muted hover:text-text-primary',
+          active && 'bg-brand/10',
+          tone,
         )}
       >
-        <Icon size={22} strokeWidth={active ? 2.4 : 2} aria-hidden="true" />
+        <span className="relative inline-flex">
+          <Icon size={22} strokeWidth={active || touched ? 2.4 : 2} aria-hidden="true" />
+          {item && <StatusBadge item={item} className="absolute -top-1 -right-2" />}
+          {isMore && moreTracked.length > 0 && (
+            allDone
+              ? <StatusBadge item={{ level: 'done', done: moreDone, total: moreTracked.length }} className="absolute -top-1.5 -right-3" />
+              : (
+                <span
+                  key={moreDone} aria-hidden="true"
+                  className={cn(
+                    'pop-in absolute -top-2 -right-4 min-w-[22px] h-4 px-1 rounded-full text-[10px] leading-4 font-bold text-center ring-2 ring-bg-card',
+                    moreDone > 0 ? 'bg-brand text-bg' : 'bg-bg-elevated text-text-muted',
+                  )}
+                >{moreDone}/{moreTracked.length}</span>
+              )
+          )}
+        </span>
         <span>{label}</span>
       </Link>
     )
@@ -88,10 +128,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <NavLink
             key={to}
             to={to}
-            className={({ isActive }) => cn('nav-link', isActive && 'active')}
+            className={({ isActive }) => cn('nav-link', isActive && 'active', !isCoach && ROUTE_STATUS[to] && status[ROUTE_STATUS[to]].level !== 'none' && '!text-success')}
           >
             <Icon size={18} aria-hidden="true" />
             <span>{label}</span>
+            {!isCoach && ROUTE_STATUS[to] && status[ROUTE_STATUS[to]].level !== 'none' && (
+              <StatusBadge item={status[ROUTE_STATUS[to]]} size={18} className="ml-auto !ring-0" />
+            )}
           </NavLink>
         ))}
       </nav>
@@ -157,7 +200,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </button>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              {quickActions.map(({ to, icon: Icon, label, hint }, i) => (
+              {quickActions.map(({ to, icon: Icon, label, hint }, i) => {
+                const key = ROUTE_STATUS[to]
+                const item = key ? status[key] : undefined
+                const done = item?.level === 'done'
+                return (
                 <Link
                   key={to}
                   to={to}
@@ -165,15 +212,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   style={{ '--d': 120 + i * 55 } as React.CSSProperties}
                   className="enter flex flex-col gap-3 p-4 rounded-3xl bg-bg-elevated border border-border hover:border-brand/50 transition-all active:scale-[0.97]"
                 >
-                  <span className="w-10 h-10 rounded-2xl bg-brand/10 text-brand flex items-center justify-center">
+                  <span className={cn('relative w-10 h-10 rounded-2xl flex items-center justify-center', done ? 'bg-success/15 text-success' : 'bg-brand/10 text-brand')}>
                     <Icon size={20} aria-hidden="true" />
+                    {item && <StatusBadge item={item} className="absolute -top-1 -right-1" />}
                   </span>
                   <span>
                     <span className="block text-sm font-bold text-text-primary">{label}</span>
-                    <span className="block text-xs text-text-secondary">{hint}</span>
+                    <span className={cn('block text-xs', done ? 'text-success' : 'text-text-secondary')}>
+                      {done ? 'Heute erledigt' : item?.level === 'partial' ? statusLabel(key, item) : hint}
+                    </span>
                   </span>
                 </Link>
-              ))}
+                )
+              })}
             </div>
           </div>
         </div>
