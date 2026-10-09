@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
 import { LogOut, Plus, X, Zap } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
@@ -12,20 +12,36 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [quickOpen, setQuickOpen] = useState(false)
+  const [quickClosing, setQuickClosing] = useState(false)
+  const mainRef = useRef<HTMLElement>(null)
+  const closeTimer = useRef<number | undefined>(undefined)
 
   const isCoach = profile?.role === 'coach'
   const nav = isCoach ? coachNav : clientNav
   const tabs = isCoach ? coachTabs : clientTabs
   const moreRoutes = moreItems(nav, tabs).map(i => i.to)
 
-  // Sheet schließen bei Navigation und mit Escape
-  useEffect(() => { setQuickOpen(false) }, [location.pathname])
+  // Sheet gleitet beim Schließen nach unten weg, erst danach wird es entfernt
+  const closeQuick = useCallback(() => {
+    setQuickClosing(true)
+    window.clearTimeout(closeTimer.current)
+    closeTimer.current = window.setTimeout(() => { setQuickOpen(false); setQuickClosing(false) }, 240)
+  }, [])
+  useEffect(() => () => window.clearTimeout(closeTimer.current), [])
+
+  // Bei Seitenwechsel: Sheet sofort zu, neue Seite beginnt oben
+  useEffect(() => {
+    window.clearTimeout(closeTimer.current)
+    setQuickOpen(false)
+    setQuickClosing(false)
+    mainRef.current?.scrollTo({ top: 0 })
+  }, [location.pathname])
   useEffect(() => {
     if (!quickOpen) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setQuickOpen(false) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeQuick() }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [quickOpen])
+  }, [quickOpen, closeQuick])
 
   async function handleSignOut() {
     await signOut()
@@ -43,7 +59,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         to={to}
         aria-current={active ? 'page' : undefined}
         className={cn(
-          'flex flex-col items-center justify-center gap-1 py-2 rounded-2xl text-[11px] font-semibold transition-colors',
+          'flex flex-col items-center justify-center gap-1 py-2 rounded-2xl text-[11px] font-semibold transition-all duration-200 active:scale-95',
           active ? 'text-brand' : 'text-text-muted hover:text-text-primary',
         )}
       >
@@ -111,14 +127,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden bg-bg">
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 shrink-0 border-r border-border bg-bg-card">
+      <aside className="enter hidden lg:flex flex-col w-64 shrink-0 border-r border-border bg-bg-card" style={{ '--d': 60 } as React.CSSProperties}>
         <SidebarContent />
       </aside>
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <main className="flex-1 overflow-y-auto p-4 pt-6 pb-32 lg:p-8 lg:pb-8">
-          <div className="max-w-7xl mx-auto animate-in">
+        <main ref={mainRef} className="flex-1 overflow-y-auto p-4 pt-6 pb-32 lg:p-8 lg:pb-8">
+          {/* key: jede Seite baut sich beim Wechsel neu auf (siehe .page in index.css) */}
+          <div key={location.pathname} className="page max-w-7xl mx-auto">
             {children}
           </div>
         </main>
@@ -127,12 +144,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Mobile: Schnellzugriff-Sheet */}
       {quickOpen && !isCoach && (
         <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Schnellzugriff">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setQuickOpen(false)} />
-          <div className="absolute inset-x-0 bottom-0 bg-bg-card border-t border-border rounded-t-4xl p-5 pb-8 animate-in">
+          <div className={cn('absolute inset-0 bg-black/60', quickClosing ? 'fade-out' : 'fade-in')} onClick={closeQuick} />
+          <div className={cn('absolute inset-x-0 bottom-0 bg-bg-card border-t border-border rounded-t-4xl p-5 pb-8', quickClosing ? 'sheet-out' : 'sheet-in')}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-text-primary">Schnell eintragen</h2>
               <button
-                onClick={() => setQuickOpen(false)}
+                onClick={closeQuick}
                 className="p-2 rounded-full bg-bg-elevated text-text-secondary hover:text-text-primary"
                 aria-label="Schließen"
               >
@@ -145,7 +162,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   key={to}
                   to={to}
                   autoFocus={i === 0}
-                  className="flex flex-col gap-3 p-4 rounded-3xl bg-bg-elevated border border-border hover:border-brand/50 transition-colors"
+                  style={{ '--d': 120 + i * 55 } as React.CSSProperties}
+                  className="enter flex flex-col gap-3 p-4 rounded-3xl bg-bg-elevated border border-border hover:border-brand/50 transition-all active:scale-[0.97]"
                 >
                   <span className="w-10 h-10 rounded-2xl bg-brand/10 text-brand flex items-center justify-center">
                     <Icon size={20} aria-hidden="true" />
@@ -164,7 +182,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Mobile: Tab-Bar */}
       <nav
         aria-label="Hauptnavigation"
-        className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-bg-card border-t border-border rounded-t-4xl shadow-nav px-3 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+        style={{ '--d': 200 } as React.CSSProperties}
+        className="enter lg:hidden fixed bottom-0 inset-x-0 z-30 bg-bg-card border-t border-border rounded-t-4xl shadow-nav px-3 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
       >
         <div className={cn('grid items-end', isCoach ? 'grid-cols-3' : 'grid-cols-5')}>
           {tabs.left.map(t => <TabLink key={t.to} {...t} />)}
@@ -172,10 +191,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div className="flex justify-center">
               <button
                 type="button"
-                onClick={() => setQuickOpen(true)}
+                onClick={() => { window.clearTimeout(closeTimer.current); setQuickClosing(false); setQuickOpen(true) }}
                 aria-label="Schnellzugriff öffnen"
                 aria-expanded={quickOpen}
-                className="-mt-8 w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center ring-4 ring-bg-card border border-brand/40 shadow-glow transition-transform active:scale-95"
+                className="-mt-8 w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center ring-4 ring-bg-card border border-brand/40 shadow-glow transition-transform duration-200 active:scale-90"
               >
                 <Plus size={26} strokeWidth={2.5} aria-hidden="true" />
               </button>

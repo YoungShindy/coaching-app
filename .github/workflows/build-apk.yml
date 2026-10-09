@@ -67,7 +67,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-${{ github.run_number }}
-          name: "Coaching App v${{ github.run_number }}"
+          name: "HLX Together v${{ github.run_number }}"
           body: "Android APK — direkt auf Android installierbar.\n\nEinstellungen → Sicherheit → Unbekannte Quellen aktivieren → APK öffnen → Installieren"
           files: android/app/build/outputs/apk/release/app-release.apk
         env:

@@ -55,6 +55,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [theme])
 
   const setTheme = useCallback((t: Theme) => {
+    // Farben kurz überblenden statt springen (siehe html.theme-fade in index.css)
+    const root = document.documentElement
+    root.classList.add('theme-fade')
+    window.setTimeout(() => root.classList.remove('theme-fade'), 450)
     setThemeState(t)
     try { localStorage.setItem(STORAGE_KEY, t) } catch { /* Speicher blockiert – Theme gilt nur für diese Sitzung */ }
   }, [])

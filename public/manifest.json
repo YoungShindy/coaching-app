@@ -6,7 +6,7 @@
   "scope": "/coaching-app/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0d0f0e",
+  "background_color": "#075640",
   "theme_color": "#075640",
   "icons": [
     {

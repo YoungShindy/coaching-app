@@ -23,8 +23,8 @@ export function Modal({ open, onClose, title, children, size = 'md' }: ModalProp
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className={cn('relative w-full card shadow-2xl animate-in', sizes[size])}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm fade-in" onClick={onClose} />
+      <div className={cn('relative w-full card shadow-2xl modal-in', sizes[size])}>
         {title && (
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-text-primary">{title}</h2>
