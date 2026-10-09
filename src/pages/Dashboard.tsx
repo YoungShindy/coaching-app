@@ -437,7 +437,7 @@ export function Dashboard() {
       <section aria-labelledby="plan-title">
         <div className="enter flex items-center justify-between mb-3 px-1" style={d(350)}>
           <h2 id="plan-title" className="section-title">Heutiger Plan</h2>
-          <Link to="/calendar" className="text-sm font-bold text-brand underline underline-offset-2">Alle ansehen</Link>
+          <Link to="/calendar" className="hit text-sm font-bold text-brand underline underline-offset-2">Alle ansehen</Link>
         </div>
         {loading ? (
           <div className="card !p-4 h-[5.5rem] animate-pulse" aria-hidden="true" />

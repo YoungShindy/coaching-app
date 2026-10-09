@@ -108,8 +108,8 @@ export function More() {
       </div>
 
       <div className="flex gap-4 px-2">
-        <Link to="/legal" className="text-xs text-text-muted hover:text-text-secondary underline underline-offset-2">Impressum</Link>
-        <Link to="/legal" className="text-xs text-text-muted hover:text-text-secondary underline underline-offset-2">Datenschutz</Link>
+        <Link to="/legal" className="hit text-xs text-text-muted hover:text-text-secondary underline underline-offset-2">Impressum</Link>
+        <Link to="/legal" className="hit text-xs text-text-muted hover:text-text-secondary underline underline-offset-2">Datenschutz</Link>
       </div>
     </div>
   )

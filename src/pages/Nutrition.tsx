@@ -1188,7 +1188,7 @@ function MealSection({ meal, items, onAdd, onDelete }: {
         <button
           onClick={onAdd}
           aria-label={`${meal.id}: Eintrag hinzufügen`}
-          className="w-7 h-7 rounded-full flex items-center justify-center bg-brand/10 text-brand hover:bg-brand/20 transition-colors shrink-0"
+          className="hit w-7 h-7 rounded-full flex items-center justify-center bg-brand/10 text-brand hover:bg-brand/20 transition-colors shrink-0"
         >
           <Plus size={14} />
         </button>
@@ -1210,7 +1210,7 @@ function MealSection({ meal, items, onAdd, onDelete }: {
               <button
                 onClick={() => onDelete(item.id)}
                 aria-label={`${item.name} löschen`}
-                className="p-1 rounded text-text-muted hover:text-danger hover:bg-danger/10 transition-colors shrink-0"
+                className="hit p-1 rounded text-text-muted hover:text-danger hover:bg-danger/10 transition-colors shrink-0"
               >
                 <Trash2 size={13} />
               </button>

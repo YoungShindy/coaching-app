@@ -140,12 +140,27 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const award = useCallback(async (list: Award[], opts?: { silent?: boolean }): Promise<Award[] | null> => {
     if (!user || !list.length) return []
     list.forEach(a => known.current.add(key(a)))
-    const { data, error } = await supabase
+    const insert = (items: Award[]) => supabase
       .from('xp_events')
-      .upsert(list.map(a => ({ user_id: user.id, ...a })) as never, { onConflict: 'user_id,quelle,ref', ignoreDuplicates: true })
+      .upsert(items.map(a => ({ user_id: user.id, ...a })) as never, { onConflict: 'user_id,quelle,ref', ignoreDuplicates: true })
       .select('quelle,ref,xp,punkte,titel')
-    if (error) { list.forEach(a => known.current.delete(key(a))); return null } // beim nächsten Mal noch einmal versuchen
-    const added = ((data ?? []) as Award[])
+    const first = await insert(list)
+    let added: Award[] = []
+    if (!first.error) {
+      added = (first.data ?? []) as Award[]
+    } else if (list.length === 1) {
+      // Abgelehnt vom Server (P0001): bleibt für diese Sitzung vermerkt. Sonst (Verbindung): beim nächsten Mal noch einmal versuchen.
+      if (first.error.code !== 'P0001') known.current.delete(key(list[0]))
+      return null
+    } else {
+      // Eine abgelehnte Zeile soll die anderen nicht blockieren: einzeln eintragen
+      let network = false
+      for (const a of list) {
+        const r = await insert([a])
+        if (r.error) { if (r.error.code !== 'P0001') { known.current.delete(key(a)); network = true } } else added.push(...((r.data ?? []) as Award[]))
+      }
+      if (network && !added.length) return null
+    }
     if (!added.length) return []
     const xp = added.reduce((a, r) => a + r.xp, 0)
     const punkte = added.reduce((a, r) => a + r.punkte, 0)

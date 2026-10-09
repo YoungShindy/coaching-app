@@ -45,6 +45,7 @@ export function Celebrations() {
   const { toasts, levelUp, dismissLevelUp, character, available } = useGame()
   const avatar = useRef<AvatarHandle>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
+  const compact = typeof window !== 'undefined' && window.innerHeight < 700
 
   useEffect(() => {
     if (!levelUp) return
@@ -80,8 +81,11 @@ export function Celebrations() {
       </div>
 
       {levelUp && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-5" role="dialog" aria-modal="true" aria-label={`Level ${levelUp} erreicht`}>
+        <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label={`Level ${levelUp} erreicht`}>
           <div className="absolute inset-0 bg-black/85 backdrop-blur-sm fade-in" onClick={dismissLevelUp} />
+          {/* Auf kleinen Handys scrollt der Inhalt, damit "Weiter" immer erreichbar bleibt */}
+          <div className="absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain" onClick={e => { if (e.target === e.currentTarget) dismissLevelUp() }}>
+          <div className="min-h-full flex items-center justify-center p-5 py-[max(1.25rem,env(safe-area-inset-top))]" onClick={e => { if (e.target === e.currentTarget) dismissLevelUp() }}>
           <div className="relative w-full max-w-sm modal-in text-center">
             {/* Strahlen hinter der Figur */}
             <div className="absolute left-1/2 top-[34%] -translate-x-1/2 -translate-y-1/2 w-[440px] h-[440px] max-w-[130vw] pointer-events-none" aria-hidden="true">
@@ -98,7 +102,7 @@ export function Celebrations() {
             <div className="relative flex flex-col items-center">
               <div className="level-pop text-xs font-extrabold tracking-[0.3em] text-warning uppercase mb-1">Level-up</div>
               <div className="relative">
-                <Avatar ref={avatar} config={character.config ?? DEFAULT_AVATAR} equipped={character.equipped} size={190} idle label={`${character.name} jubelt`} />
+                <Avatar ref={avatar} config={character.config ?? DEFAULT_AVATAR} equipped={character.equipped} size={compact ? 140 : 190} idle label={`${character.name} jubelt`} />
                 <span className="level-pop absolute -bottom-2 left-1/2 -translate-x-1/2 min-w-[84px] px-4 py-1.5 rounded-full bg-primary text-white text-2xl font-extrabold tabular-nums ring-4 ring-bg-card border border-brand/50 shadow-glow">
                   {levelUp}
                 </span>
@@ -131,6 +135,8 @@ export function Celebrations() {
                 )}
               </div>
             </div>
+          </div>
+          </div>
           </div>
         </div>
       )}

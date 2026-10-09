@@ -208,6 +208,9 @@
 .avatar-bob { animation: avatar-bob 3.8s ease-in-out infinite; }
 .water-wave { animation: water-wave 3.2s linear infinite; }
 .water-bubble { animation: water-bubble 1.6s ease-in infinite; }
+/* Größere Tippfläche für kleine Knöpfe, ohne dass sich das Aussehen ändert */
+.hit { position: relative; }
+.hit::after { content: ''; position: absolute; inset: -8px; }
 .pop-in { animation: pop-in 0.5s var(--ease-out) backwards; }
 .check-draw { stroke-dasharray: 24; animation: check-draw 0.4s 0.18s var(--ease-out) backwards; }
 .fade-in { animation: fade-in 0.3s ease-out both; }

@@ -120,7 +120,7 @@ export function Character() {
 
       {/* Heute verdient */}
       <div className="enter card !p-4" style={{ '--d': 120 } as React.CSSProperties}>
-        <div className="flex items-baseline justify-between mb-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 mb-2">
           <h2 className="text-sm font-bold text-text-primary">Heute verdient</h2>
           {earned.length > 0 && <span className="text-xs font-semibold tabular-nums text-text-secondary">+{gainedXp} XP · +{gainedPts} Punkte</span>}
         </div>
@@ -131,7 +131,7 @@ export function Character() {
             {earned.slice(0, 8).map(e => (
               <li key={e.id} className="flex items-center gap-2.5 text-sm">
                 <span className="w-5 h-5 rounded-full bg-success/15 text-success flex items-center justify-center shrink-0"><Check size={12} strokeWidth={3.5} aria-hidden="true" /></span>
-                <span className="flex-1 text-text-primary truncate">{e.titel ?? 'Erfolg'}</span>
+                <span className="flex-1 min-w-0 text-text-primary break-words">{e.titel ?? 'Erfolg'}</span>
                 <span className="text-xs font-semibold tabular-nums text-text-secondary">{e.xp > 0 && `+${e.xp} XP`}{e.punkte > 0 && <span className="text-warning"> +{e.punkte}</span>}</span>
               </li>
             ))}

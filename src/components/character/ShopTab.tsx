@@ -36,19 +36,19 @@ export function ShopTab() {
 
   return (
     <div className="space-y-4">
-      <div className="card flex items-center gap-4 !p-4">
+      <div className="card flex items-center gap-4 !p-4 max-[359px]:flex-col max-[359px]:text-center">
         <div className="shrink-0 rounded-3xl bg-brand/10 px-2 pt-1">
           <Avatar config={character.config} equipped={character.equipped} size={92} view="head" label="So siehst du aus" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 text-lg font-extrabold text-text-primary tabular-nums">
+          <div className="flex items-center max-[359px]:justify-center gap-1.5 text-lg font-extrabold text-text-primary tabular-nums">
             <Coins size={18} className="text-warning" aria-hidden="true" /> {stats.punkte} <span className="text-sm font-semibold text-text-secondary">Punkte</span>
           </div>
           <p className="text-xs text-text-secondary mt-0.5">Level {level.level}. Neue Dinge schalten mit dem Level frei, bezahlt wird mit Punkten.</p>
           {worn > 0 && (
             <button
               onClick={() => equip({})}
-              className="mt-2 text-xs font-semibold text-brand flex items-center gap-1 hover:underline"
+              className="mt-1 -mb-2 py-2.5 pr-3 text-xs font-semibold text-brand flex items-center gap-1 hover:underline max-[359px]:mx-auto"
             ><Shirt size={13} aria-hidden="true" /> Alles ausziehen</button>
           )}
         </div>

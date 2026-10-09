@@ -87,7 +87,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         aria-current={active ? 'page' : undefined}
         aria-label={`${label}${hint}`}
         className={cn(
-          'flex flex-col items-center justify-center gap-1 py-2 rounded-2xl text-[11px] font-semibold transition-all duration-200 active:scale-95',
+          'flex flex-col items-center justify-center gap-1 py-2 rounded-2xl text-[11px] max-[339px]:text-[10px] font-semibold transition-all duration-200 active:scale-95',
           active && 'bg-brand/10',
           tone,
         )}
@@ -165,8 +165,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         </div>
         {/* Legal footer */}
         <div className="flex gap-3 px-2 pb-1 mt-1">
-          <Link to="/legal" className="text-[11px] text-text-muted hover:text-text-secondary transition-colors">Impressum</Link>
-          <Link to="/legal" className="text-[11px] text-text-muted hover:text-text-secondary transition-colors">Datenschutz</Link>
+          <Link to="/legal" className="hit text-[11px] text-text-muted hover:text-text-secondary transition-colors">Impressum</Link>
+          <Link to="/legal" className="hit text-[11px] text-text-muted hover:text-text-secondary transition-colors">Datenschutz</Link>
         </div>
       </div>
     </div>

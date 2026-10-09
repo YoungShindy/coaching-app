@@ -562,7 +562,7 @@ export function ClientDetail() {
   return (
     <div className="space-y-6">
       {/* Back */}
-      <button onClick={() => navigate('/coach')} className="flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors text-sm">
+      <button onClick={() => navigate('/coach')} className="hit flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors text-sm">
         <ArrowLeft size={16} /> Alle Klienten
       </button>
 

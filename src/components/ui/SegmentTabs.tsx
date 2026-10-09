@@ -36,7 +36,7 @@ export function SegmentTabs<T extends string>({ tabs, value, onChange, label, cl
         <button
           key={t.key} role="tab" aria-selected={t.key === value} tabIndex={t.key === value ? 0 : -1}
           onClick={() => onChange(t.key)}
-          className={cn('relative z-10 py-2 px-2 text-sm font-semibold rounded-full transition-colors duration-300 active:scale-95 truncate',
+          className={cn('relative z-10 py-2 px-2 max-[359px]:px-1 text-sm max-[359px]:text-[12px] font-semibold rounded-full transition-colors duration-300 active:scale-95 truncate',
             t.key === value ? 'text-white' : 'text-text-secondary hover:text-text-primary')}
         >{t.label}</button>
       ))}

@@ -13,9 +13,10 @@
     "cap:sync": "npm run build:native && npx cap sync android",
     "cap:open": "npx cap open android",
     "test:reminders": "node --test supabase/functions/_shared/reminders.test.ts",
-    "test": "node --test supabase/functions/_shared/reminders.test.ts tests/photoCompare.test.ts tests/game.test.ts"
+    "test": "node --test supabase/functions/_shared/reminders.test.ts tests/photoCompare.test.ts tests/game.test.ts tests/db.test.ts"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/node": "^26.0.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

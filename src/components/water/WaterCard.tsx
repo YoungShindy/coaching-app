@@ -120,7 +120,7 @@ export function WaterCard({ totalMl, goalMl, entries, bottleMl, onBottleChange, 
           </button>
         ))}
         {entries > 0 && (
-          <button onClick={onRemoveLast} className="ml-auto text-xs text-text-muted hover:text-danger transition-colors flex items-center gap-1 px-2 py-1.5 rounded-lg" aria-label="Letzten Eintrag rückgängig machen">
+          <button onClick={onRemoveLast} className="ml-auto text-xs text-text-muted hover:text-danger transition-colors flex items-center gap-1 px-2.5 py-2.5 rounded-lg" aria-label="Letzten Eintrag rückgängig machen">
             <Undo2 size={13} aria-hidden="true" /> Rückgängig
           </button>
         )}
@@ -132,13 +132,13 @@ export function WaterCard({ totalMl, goalMl, entries, bottleMl, onBottleChange, 
           {BOTTLES.map(ml => (
             <button
               key={ml} aria-pressed={bottleMl === ml && !custom} onClick={() => { setCustom(false); onBottleChange(ml) }}
-              className={cn('px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95',
+              className={cn('px-3.5 py-2.5 rounded-full text-xs font-semibold border transition-all active:scale-95',
                 bottleMl === ml && !custom ? 'bg-primary border-brand text-white' : 'border-border text-text-secondary hover:border-brand/40')}
             >{ml >= 1000 ? `${ml / 1000} l` : `${ml} ml`}</button>
           ))}
           <button
             aria-pressed={custom || !BOTTLES.includes(bottleMl)} onClick={() => setCustom(true)}
-            className={cn('px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95',
+            className={cn('px-3.5 py-2.5 rounded-full text-xs font-semibold border transition-all active:scale-95',
               custom || !BOTTLES.includes(bottleMl) ? 'bg-primary border-brand text-white' : 'border-border text-text-secondary hover:border-brand/40')}
           >Andere</button>
         </div>

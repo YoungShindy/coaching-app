@@ -125,7 +125,7 @@ export function RewardsTab() {
       <section aria-label="Deine Belohnungen" className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold tracking-wider text-text-secondary uppercase flex items-center gap-1.5"><Gift size={13} aria-hidden="true" /> Meine Belohnungen</h3>
-          <button onClick={() => setEditing('new')} className="text-sm font-semibold text-brand flex items-center gap-1 hover:underline"><Plus size={15} aria-hidden="true" /> Neu</button>
+          <button onClick={() => setEditing('new')} className="-my-2 px-2 py-2.5 text-sm font-semibold text-brand flex items-center gap-1 hover:underline"><Plus size={15} aria-hidden="true" /> Neu</button>
         </div>
         {rewards.length === 0 && <p className="card text-sm text-text-secondary">Noch keine eigene Belohnung. Wähle unten eine Idee oder lege selbst eine an.</p>}
         {rewards.map((r, i) => {

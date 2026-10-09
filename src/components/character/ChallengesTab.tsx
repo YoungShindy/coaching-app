@@ -160,7 +160,7 @@ export function ChallengesTab() {
         <section aria-label="Erledigte Challenges">
           <button
             onClick={() => setShowDone(v => !v)} aria-expanded={showDone}
-            className="w-full flex items-center justify-between text-xs font-bold tracking-wider text-text-secondary uppercase py-1"
+            className="w-full flex items-center justify-between text-xs font-bold tracking-wider text-text-secondary uppercase py-3"
           >
             <span className="flex items-center gap-1.5"><Check size={13} aria-hidden="true" /> Geschafft ({finished.length})</span>
             <ChevronDown size={16} className={cn('transition-transform duration-300', showDone && 'rotate-180')} aria-hidden="true" />
