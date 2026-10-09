@@ -7,6 +7,9 @@ import { formatDate, todayISO } from '../lib/utils'
 import { Modal } from '../components/ui/Modal'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Spinner } from '../components/ui/Spinner'
+import { KoerperFotos } from '../components/photos/KoerperFotos'
+import { SegmentTabs } from '../components/ui/SegmentTabs'
+import { PHOTO_LABEL_SUGGESTIONS, uploadBodyPhoto } from '../lib/koerperfotos'
 import type { GewichtEntry } from '../types/database'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
@@ -22,8 +25,6 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   )
 }
 
-const COMPARE_DAYS = [30, 60, 90] as const
-
 export function Weight() {
   const { user } = useAuth()
   const { colors } = useTheme()
@@ -35,6 +36,7 @@ export function Weight() {
   const [saving, setSaving] = useState(false)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [photoLabel, setPhotoLabel] = useState(PHOTO_LABEL_SUGGESTIONS[0])
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [tab, setTab] = useState<'log' | 'fotos'>('log')
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
@@ -82,8 +84,12 @@ export function Weight() {
 
     if (data && photoFile) {
       setUploadingPhoto(true)
-      const url = await uploadPhoto(data.id, photoFile)
-      if (url) await supabase.from('gewicht').update({ foto_url: url } as any).eq('id', data.id)
+      const res = await uploadBodyPhoto(user.id, photoFile, form.datum, photoLabel)
+      if (!res.ok && res.reason === 'table') {
+        // Datenbank noch ohne Körperfoto-Tabelle: altes Verfahren (ein Foto je Gewichtseintrag)
+        const url = await uploadPhoto(data.id, photoFile)
+        if (url) await supabase.from('gewicht').update({ foto_url: url } as any).eq('id', data.id)
+      }
       setUploadingPhoto(false)
     }
 
@@ -117,19 +123,6 @@ export function Weight() {
   const domainMin = entries.length ? Math.min(...entries.map(e => e.gewicht)) - 2 : 50
   const domainMax = entries.length ? Math.max(...entries.map(e => e.gewicht)) + 2 : 100
 
-  // Photos for comparison
-  const photosOnly = entries.filter(e => e.foto_url)
-  const startPhoto = photosOnly[0] ?? null
-  function getPhotoNearDaysAgo(days: number) {
-    const target = new Date()
-    target.setDate(target.getDate() - days)
-    return photosOnly.reduce<GewichtEntry | null>((best, e) => {
-      const diff = Math.abs(new Date(e.datum).getTime() - target.getTime())
-      const bestDiff = best ? Math.abs(new Date(best.datum).getTime() - target.getTime()) : Infinity
-      return diff < bestDiff ? e : best
-    }, null)
-  }
-
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -142,6 +135,14 @@ export function Weight() {
         </button>
       </div>
 
+      {/* Reiter: Einträge / Körperfotos */}
+      <SegmentTabs
+        tabs={[{ key: 'log', label: 'Einträge' }, { key: 'fotos', label: 'Körperfotos' }]}
+        value={tab} onChange={k => setTab(k as 'log' | 'fotos')} label="Gewicht oder Körperfotos"
+      />
+
+      {tab === 'log' && (
+        <>
       {/* Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
@@ -182,15 +183,8 @@ export function Weight() {
         </div>
       )}
 
-      {/* Tabs: Log / Fotos */}
-      <div className="flex gap-1 p-1 bg-bg-elevated rounded-xl border border-border">
-        {[{ id: 'log', label: 'Einträge', icon: Scale }, { id: 'fotos', label: 'Körperfotos', icon: Images }].map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => setTab(id as any)}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${tab === id ? 'bg-primary text-white' : 'text-text-secondary hover:text-text-primary'}`}>
-            <Icon size={14} /> {label}
-          </button>
-        ))}
-      </div>
+        </>
+      )}
 
       {/* Log Tab */}
       {tab === 'log' && (
@@ -248,138 +242,7 @@ export function Weight() {
       )}
 
       {/* Fotos Tab */}
-      {tab === 'fotos' && (
-        <div className="space-y-6">
-          {photosOnly.length === 0 ? (
-            <div className="card text-center py-12">
-              <Camera size={32} className="text-text-muted mx-auto mb-3" />
-              <div className="text-text-secondary text-sm">Noch keine Körperfotos.</div>
-              <div className="text-text-muted text-xs mt-1">Füge beim nächsten Eintrag ein Foto hinzu.</div>
-            </div>
-          ) : (
-            <>
-              {/* Referenz vs Aktuell */}
-              {startPhoto && photosOnly.length >= 2 && (() => {
-                const currentPhoto = photosOnly.at(-1)!
-                const kgChange = currentPhoto.gewicht - startPhoto.gewicht
-                return (
-                  <div className="card">
-                    <h3 className="section-title mb-4">Referenz vs. Aktuell</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <div className="aspect-[3/4] rounded-xl overflow-hidden bg-bg-elevated border-2 border-brand/30 cursor-pointer" onClick={() => setLightboxUrl(startPhoto.foto_url!)}>
-                          <img src={startPhoto.foto_url!} alt="Referenz" className="w-full h-full object-cover" />
-                        </div>
-                        <div className="text-center">
-                          <div className="text-xs font-bold text-brand">Referenz (Start)</div>
-                          <div className="text-xs text-text-muted">{formatDate(startPhoto.datum)}</div>
-                          <div className="text-xs text-text-secondary">{startPhoto.gewicht} kg</div>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="aspect-[3/4] rounded-xl overflow-hidden bg-bg-elevated border-2 border-success/30 cursor-pointer" onClick={() => setLightboxUrl(currentPhoto.foto_url!)}>
-                          <img src={currentPhoto.foto_url!} alt="Aktuell" className="w-full h-full object-cover" />
-                        </div>
-                        <div className="text-center">
-                          <div className="text-xs font-bold text-success">Aktuell</div>
-                          <div className="text-xs text-text-muted">{formatDate(currentPhoto.datum)}</div>
-                          <div className="text-xs text-text-secondary">
-                            {currentPhoto.gewicht} kg
-                            <span className={`ml-1.5 font-semibold ${kgChange < 0 ? 'text-success' : kgChange > 0 ? 'text-danger' : 'text-text-muted'}`}>
-                              ({kgChange > 0 ? '+' : ''}{kgChange.toFixed(1)} kg)
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })()}
-
-              {/* 15-day milestones: reference alongside each 15-day photo */}
-              {startPhoto && (() => {
-                const startMs = new Date(startPhoto.datum).getTime()
-                const milestones: { label: string; entry: GewichtEntry | null }[] = []
-                let day = 15
-                while (startMs + day * 86400000 <= Date.now() + 86400000) {
-                  const target = new Date(startMs + day * 86400000)
-                  const nearest = photosOnly.reduce<GewichtEntry | null>((best, e) => {
-                    const diff = Math.abs(new Date(e.datum).getTime() - target.getTime())
-                    const bestDiff = best ? Math.abs(new Date(best.datum).getTime() - target.getTime()) : Infinity
-                    return diff < bestDiff ? e : best
-                  }, null)
-                  // Only include if nearest photo is within 7 days of milestone
-                  const nearestDiff = nearest ? Math.abs(new Date(nearest.datum).getTime() - target.getTime()) : Infinity
-                  milestones.push({ label: `Tag ${day}`, entry: nearestDiff <= 7 * 86400000 ? nearest : null })
-                  day += 15
-                }
-                if (milestones.length === 0) return null
-                return (
-                  <div className="card">
-                    <h3 className="section-title mb-4">15-Tage Vergleich (mit Referenz)</h3>
-                    <div className="space-y-4">
-                      {milestones.map(({ label, entry }) => (
-                        <div key={label}>
-                          <div className="text-xs font-semibold text-text-muted mb-2">{label}</div>
-                          <div className="grid grid-cols-2 gap-3">
-                            {/* Reference always on left */}
-                            <div className="space-y-1">
-                              <div className="aspect-[3/4] rounded-xl overflow-hidden bg-bg-elevated border border-brand/30 cursor-pointer" onClick={() => setLightboxUrl(startPhoto.foto_url!)}>
-                                <img src={startPhoto.foto_url!} alt="Referenz" className="w-full h-full object-cover" />
-                              </div>
-                              <div className="text-center">
-                                <div className="text-[10px] font-semibold text-brand">Referenz</div>
-                                <div className="text-[10px] text-text-muted">{startPhoto.gewicht} kg</div>
-                              </div>
-                            </div>
-                            {/* Milestone photo on right */}
-                            <div className="space-y-1">
-                              <div className={`aspect-[3/4] rounded-xl overflow-hidden bg-bg-elevated border ${entry ? 'border-border cursor-pointer' : 'border-dashed border-border'} flex items-center justify-center`}
-                                onClick={() => entry?.foto_url && setLightboxUrl(entry.foto_url)}>
-                                {entry?.foto_url ? (
-                                  <img src={entry.foto_url} alt={label} className="w-full h-full object-cover" />
-                                ) : (
-                                  <div className="text-center p-2">
-                                    <Camera size={18} className="text-text-muted mx-auto mb-1" />
-                                    <span className="text-[10px] text-text-muted">Kein Foto</span>
-                                  </div>
-                                )}
-                              </div>
-                              <div className="text-center">
-                                <div className="text-[10px] font-semibold text-text-secondary">{label}</div>
-                                {entry && <div className="text-[10px] text-text-muted">{entry.gewicht} kg · {formatDate(entry.datum, 'dd.MM.yy')}</div>}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })()}
-
-              {/* All photos grid */}
-              <div className="card">
-                <h3 className="section-title mb-4">Alle Fotos ({photosOnly.length})</h3>
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                  {[...photosOnly].reverse().map(e => (
-                    <button key={e.id} onClick={() => setLightboxUrl(e.foto_url!)}
-                      className={`relative aspect-square rounded-xl overflow-hidden border hover:border-brand transition-colors group ${e.id === startPhoto?.id ? 'border-brand/50 ring-1 ring-brand/30' : 'border-border'}`}>
-                      <img src={e.foto_url!} alt={e.datum} className="w-full h-full object-cover" />
-                      {e.id === startPhoto?.id && (
-                        <div className="absolute top-1 left-1 bg-primary text-white text-[9px] px-1 py-0.5 rounded font-bold">REF</div>
-                      )}
-                      <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] py-1 px-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {formatDate(e.datum, 'dd.MM.yy')} · {e.gewicht} kg
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
+      {tab === 'fotos' && user && <KoerperFotos userId={user.id} />}
 
       {/* Lightbox */}
       {lightboxUrl && (
@@ -425,6 +288,18 @@ export function Weight() {
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-border hover:border-brand/50 hover:bg-brand/5 transition-colors text-sm text-text-muted">
                 <Camera size={16} /> Foto aufnehmen oder auswählen
               </button>
+            )}
+            {photoPreview && (
+              <div className="mt-3">
+                <label className="label !text-xs" htmlFor="weight-photo-label">Beschriftung</label>
+                <div className="flex flex-wrap gap-1.5 mb-2" role="group" aria-label="Beschriftung wählen">
+                  {PHOTO_LABEL_SUGGESTIONS.map(l => (
+                    <button key={l} type="button" aria-pressed={photoLabel === l} onClick={() => setPhotoLabel(l)}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${photoLabel === l ? 'bg-primary border-brand text-white' : 'border-border text-text-secondary'}`}>{l}</button>
+                  ))}
+                </div>
+                <input id="weight-photo-label" className="input !py-2 text-sm" maxLength={30} value={photoLabel} onChange={e => setPhotoLabel(e.target.value)} />
+              </div>
             )}
           </div>
 

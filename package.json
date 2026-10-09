@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "cap:sync": "npm run build:native && npx cap sync android",
     "cap:open": "npx cap open android",
-    "test:reminders": "node --test supabase/functions/_shared/reminders.test.ts"
+    "test:reminders": "node --test supabase/functions/_shared/reminders.test.ts",
+    "test": "node --test supabase/functions/_shared/reminders.test.ts tests/photoCompare.test.ts"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

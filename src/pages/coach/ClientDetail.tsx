@@ -1,3 +1,4 @@
+import { KoerperFotos } from '../../components/photos/KoerperFotos'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Scale, Dumbbell, Moon, Apple, Pill, Target, FileText, Upload, CheckCircle, X, Download, Sparkles, RefreshCw, ChevronDown, ChevronUp, Home } from 'lucide-react'
@@ -756,12 +757,7 @@ export function ClientDetail() {
 
       {tab === 'weight' && (
         <div className="space-y-4">
-          {!settings?.coach_foto_freigabe && (
-            <div className="card border-border bg-bg-elevated/60 flex items-center gap-3 py-3 px-4 text-sm text-text-muted">
-              <span>🔒</span>
-              <span>Körperfotos nicht freigegeben — Klient kann die Freigabe in den Einstellungen erteilen.</span>
-            </div>
-          )}
+          <KoerperFotos userId={clientId!} readOnly consent={!!settings?.coach_foto_freigabe} />
           <div className="card overflow-x-auto">
             <h3 className="font-semibold text-text-primary mb-4">Gewichtsverlauf ({weights.length} Einträge)</h3>
             <table className="w-full text-sm">

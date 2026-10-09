@@ -8,6 +8,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { todayISO, toLocalISO, tokenColor } from '../lib/utils'
 import { Spinner } from '../components/ui/Spinner'
+import { WaterCard } from '../components/water/WaterCard'
 import type { FoodLogItem, WasserLogEntry, Rezept } from '../types/database'
 
 // ─── Local types ──────────────────────────────────────────────────────────────
@@ -53,8 +54,8 @@ const MEALS = [
   { id: 'Snack', icon: '🍎', color: 'success' },
 ] as const
 
-const WATER_GOAL_ML = 2000
-const WATER_GLASS_ML = 250
+const DEFAULT_WATER_GOAL_ML = 2000
+const BOTTLE_KEY = 'hlx-bottle-ml'
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -177,60 +178,6 @@ function MacroBar({ label, value, goal, color }: { label: string; value: number;
       <div className="h-1.5 bg-bg rounded-full overflow-hidden">
         <div className="h-full rounded-full transition-all duration-500"
           style={{ width: `${pct}%`, backgroundColor: over ? tokenColor('danger') : tokenColor(color) }} />
-      </div>
-    </div>
-  )
-}
-
-// ─── WaterTracker ─────────────────────────────────────────────────────────────
-
-function WaterTracker({ entries, onAdd, onRemoveLast }: {
-  entries: WasserLogEntry[]
-  onAdd: () => void
-  onRemoveLast: () => void
-}) {
-  const totalMl = entries.reduce((a, e) => a + e.menge_ml, 0)
-  const glasses = entries.length
-  const goalGlasses = WATER_GOAL_ML / WATER_GLASS_ML
-
-  return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Droplets size={16} className="text-info" />
-          <span className="font-semibold text-text-primary text-sm">Wasser</span>
-        </div>
-        <span className="text-xs text-text-secondary">{totalMl} / {WATER_GOAL_ML} ml</span>
-      </div>
-      <div className="flex gap-1.5 flex-wrap mb-3">
-        {Array.from({ length: goalGlasses }).map((_, i) => (
-          <div
-            key={i}
-            className={`flex items-center justify-center rounded-lg border transition-all ${
-              i < glasses
-                ? 'bg-info/20 border-info text-info'
-                : 'bg-bg border-border text-border'
-            }`}
-            style={{ width: 36, height: 44 }}
-          >
-            <Droplets size={14} />
-          </div>
-        ))}
-      </div>
-      <div className="flex justify-between items-center">
-        <span className="text-xs text-text-muted">{glasses} von {goalGlasses} Gläsern</span>
-        <div className="flex gap-1">
-          {glasses > 0 && (
-            <button onClick={onRemoveLast}
-              className="text-xs text-text-muted hover:text-danger transition-colors px-2 py-1 rounded">
-              entfernen
-            </button>
-          )}
-          <button onClick={onAdd}
-            className="text-xs text-info hover:underline font-medium flex items-center gap-0.5 px-2 py-1 rounded">
-            <Plus size={11} /> 250 ml
-          </button>
-        </div>
       </div>
     </div>
   )
@@ -1239,6 +1186,7 @@ function MealSection({ meal, items, onAdd, onDelete }: {
         </div>
         <button
           onClick={onAdd}
+          aria-label={`${meal.id}: Eintrag hinzufügen`}
           className="w-7 h-7 rounded-full flex items-center justify-center bg-brand/10 text-brand hover:bg-brand/20 transition-colors shrink-0"
         >
           <Plus size={14} />
@@ -1260,6 +1208,7 @@ function MealSection({ meal, items, onAdd, onDelete }: {
               </div>
               <button
                 onClick={() => onDelete(item.id)}
+                aria-label={`${item.name} löschen`}
                 className="p-1 rounded text-text-muted hover:text-danger hover:bg-danger/10 transition-colors shrink-0"
               >
                 <Trash2 size={13} />
@@ -1287,6 +1236,10 @@ export function Nutrition() {
   const [tab, setTab] = useState<'ernaehrung' | 'bilanz'>('ernaehrung')
   const [items, setItems] = useState<FoodLogItem[]>([])
   const [water, setWater] = useState<WasserLogEntry[]>([])
+  const [waterGoal, setWaterGoal] = useState(DEFAULT_WATER_GOAL_ML)
+  const [bottleMl, setBottleMl] = useState<number>(() => {
+    try { const v = parseInt(localStorage.getItem(BOTTLE_KEY) ?? ''); return v >= 100 && v <= 2000 ? v : 500 } catch { return 500 }
+  })
   const [burnedKcal, setBurnedKcal] = useState(0)
   const [goals, setGoals] = useState<NutritionGoals>({
     kalorie_tagesziel: 2000,
@@ -1305,7 +1258,7 @@ export function Nutrition() {
       supabase.from('food_log').select('*').eq('user_id', user.id).eq('datum', date).order('created_at'),
       supabase.from('wasser_log').select('*').eq('user_id', user.id).eq('datum', date).order('created_at'),
       supabase.from('client_settings')
-        .select('kalorie_tagesziel,protein_ziel,karbs_ziel,fett_ziel')
+        .select('kalorie_tagesziel,protein_ziel,karbs_ziel,fett_ziel,wasser_ziel_ml')
         .eq('user_id', user.id).single(),
       supabase.from('training').select('kalorien_verbrannt').eq('user_id', user.id).eq('datum', date),
     ])
@@ -1315,7 +1268,8 @@ export function Nutrition() {
       .reduce((sum, r) => sum + (r.kalorien_verbrannt ?? 0), 0)
     setBurnedKcal(burned)
     if (goalsRes.data) {
-      const d = goalsRes.data as Partial<NutritionGoals>
+      const d = goalsRes.data as Partial<NutritionGoals> & { wasser_ziel_ml?: number | null }
+      if (d.wasser_ziel_ml) setWaterGoal(d.wasser_ziel_ml)
       setGoals(g => ({
         kalorie_tagesziel: d.kalorie_tagesziel ?? g.kalorie_tagesziel,
         protein_ziel: d.protein_ziel ?? g.protein_ziel,
@@ -1327,6 +1281,21 @@ export function Nutrition() {
   }
 
   useEffect(() => { setLoading(true); load() }, [user, date])
+
+  // Flaschengröße: gespeicherter Wert aus den Einstellungen (Spalte kommt per Migration, deshalb getrennt und ohne Fehlerfolgen)
+  useEffect(() => {
+    if (!user) return
+    supabase.from('client_settings').select('wasser_flasche_ml').eq('user_id', user.id).maybeSingle().then(({ data }) => {
+      const v = (data as { wasser_flasche_ml?: number | null } | null)?.wasser_flasche_ml
+      if (v && v >= 100 && v <= 2000) setBottleMl(v)
+    })
+  }, [user])
+
+  function handleBottleChange(ml: number) {
+    setBottleMl(ml)
+    try { localStorage.setItem(BOTTLE_KEY, String(ml)) } catch { /* privater Modus */ }
+    if (user) void supabase.from('client_settings').update({ wasser_flasche_ml: ml } as never).eq('user_id', user.id)
+  }
 
   const totals = {
     kalorien: Math.round(items.reduce((a, i) => a + (i.kalorien ?? 0), 0)),
@@ -1358,19 +1327,20 @@ export function Nutrition() {
     setItems(prev => prev.filter(i => i.id !== id))
   }
 
-  async function handleAddWater() {
+  async function handleAddWater(ml: number) {
     if (!user) return
-    const { data } = await supabase.from('wasser_log').insert({
-      user_id: user.id, datum: date, menge_ml: WATER_GLASS_ML,
-    }).select().single()
-    if (data) setWater(prev => [...prev, data as WasserLogEntry])
+    // Sofort anzeigen, dann speichern: so reagiert der Tank ohne Wartezeit
+    const temp: WasserLogEntry = { id: `tmp-${Date.now()}`, user_id: user.id, datum: date, menge_ml: ml, created_at: new Date().toISOString() }
+    setWater(prev => [...prev, temp])
+    const { data } = await supabase.from('wasser_log').insert({ user_id: user.id, datum: date, menge_ml: ml }).select().single()
+    setWater(prev => prev.map(w => (w.id === temp.id ? ((data as WasserLogEntry | null) ?? w) : w)))
   }
 
   async function handleRemoveLastWater() {
     const last = water[water.length - 1]
     if (!last) return
-    await supabase.from('wasser_log').delete().eq('id', last.id)
     setWater(prev => prev.slice(0, -1))
+    if (!last.id.startsWith('tmp-')) await supabase.from('wasser_log').delete().eq('id', last.id)
   }
 
   return (
@@ -1379,6 +1349,7 @@ export function Nutrition() {
       <div className="flex items-center justify-between">
         <button
           onClick={() => setDate(shiftDate(date, -1))}
+          aria-label="Vorheriger Tag"
           className="p-2 rounded-xl hover:bg-bg-elevated transition-colors text-text-secondary"
         >
           <ChevronLeft size={18} />
@@ -1394,8 +1365,9 @@ export function Nutrition() {
         <button
           onClick={() => { if (date < today) setDate(shiftDate(date, 1)) }}
           disabled={date >= today}
+          aria-label="Nächster Tag"
           className={`p-2 rounded-xl transition-colors ${
-            date >= today ? 'text-border cursor-not-allowed' : 'hover:bg-bg-elevated text-text-secondary'
+            date >= today ? 'text-text-muted opacity-40 cursor-not-allowed' : 'hover:bg-bg-elevated text-text-secondary'
           }`}
         >
           <ChevronRight size={18} />
@@ -1445,8 +1417,12 @@ export function Nutrition() {
           ))}
 
           {/* Water */}
-          <WaterTracker
-            entries={water}
+          <WaterCard
+            totalMl={water.reduce((a, w) => a + w.menge_ml, 0)}
+            goalMl={waterGoal}
+            entries={water.length}
+            bottleMl={bottleMl}
+            onBottleChange={handleBottleChange}
             onAdd={handleAddWater}
             onRemoveLast={handleRemoveLastWater}
           />
