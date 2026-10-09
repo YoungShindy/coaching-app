@@ -52,8 +52,12 @@ function sameKey(sub: PushSubscription, key: Uint8Array): boolean {
 
 /** Service Worker bereit? Ohne Zeitlimit würde `ready` in der Entwicklung ewig warten. */
 async function readyRegistration(ms = 6000): Promise<ServiceWorkerRegistration | null> {
-  if (!('serviceWorker' in navigator)) return null
-  return Promise.race([navigator.serviceWorker.ready, new Promise<null>(res => setTimeout(() => res(null), ms))])
+  try {
+    if (!('serviceWorker' in navigator)) return null
+    return await Promise.race([navigator.serviceWorker.ready, new Promise<null>(res => setTimeout(() => res(null), ms))])
+  } catch {
+    return null // z. B. eingebettete Vorschau ohne Zugriff auf den Service Worker
+  }
 }
 
 const readFlag = () => { try { return localStorage.getItem(OPT_IN_KEY) } catch { return null } }
@@ -67,7 +71,8 @@ export async function getPushState(): Promise<PushState> {
   if (Notification.permission === 'denied') return 'denied'
   if (Notification.permission === 'default') return 'off'
   const reg = await readyRegistration(3000)
-  const sub = await reg?.pushManager.getSubscription()
+  if (!reg) return 'unsupported'
+  const sub = await reg.pushManager.getSubscription()
   return sub ? 'on' : 'off'
 }
 

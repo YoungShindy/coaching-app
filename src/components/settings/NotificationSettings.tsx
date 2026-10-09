@@ -100,8 +100,8 @@ export function NotificationSettings({ userId, isCoach, settings, onPatch }: {
   const samples = useMemo(buildSamples, [])
 
   const refresh = useCallback(async () => {
-    setState(await getPushState())
-    setDevices(await listDevices(userId))
+    try { setState(await getPushState()) } catch { setState('unsupported') }
+    try { setDevices(await listDevices(userId)) } catch { /* Geräteliste ist optional */ }
   }, [userId])
   useEffect(() => { void refresh() }, [refresh])
 
