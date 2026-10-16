@@ -14,6 +14,7 @@ import { SegmentedTabs } from '../components/ui/SegmentedTabs'
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Modal } from '../components/ui/Modal'
+import { PhotoSourceButtons } from '../components/PhotoCapture'
 
 export const MS_PER_DAY = 864e5
 export const dayNumber = (dateISO) => Math.round(Date.parse(`${dateISO}T00:00:00Z`) / MS_PER_DAY)
@@ -237,9 +238,7 @@ export function OQ_({ open: isOpen, onClose: handleClose, userId: uid, labels: k
     [file, setFile] = useState(null),
     [previewUrl, setPreviewUrl] = useState(null),
     [saving, setSaving] = useState(false),
-    [errorText, setErrorText] = useState(''),
-    cameraInput = useRef(null),
-    galleryInput = useRef(null)
+    [errorText, setErrorText] = useState('')
   ;(useEffect(() => {
     isOpen && (setPhotoDate(todayISO()), setPhotoLabel(presetLabel ?? DEFAULT_LABELS[0]), setFile(null), setPreviewUrl(null), setErrorText(''))
   }, [isOpen, presetLabel]),
@@ -281,25 +280,6 @@ export function OQ_({ open: isOpen, onClose: handleClose, userId: uid, labels: k
       <div className="space-y-5 pb-4">
         <div>
           <span className="label">Foto</span>
-          <input
-            ref={cameraInput}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="sr-only"
-            tabIndex={-1}
-            aria-hidden="true"
-            onChange={(event) => chooseFile(event.target.files?.[0])}
-          />
-          <input
-            ref={galleryInput}
-            type="file"
-            accept="image/*"
-            className="sr-only"
-            tabIndex={-1}
-            aria-hidden="true"
-            onChange={(event) => chooseFile(event.target.files?.[0])}
-          />
           {previewUrl ? (
             <div className="relative w-40 aspect-[3/4] rounded-2xl overflow-hidden border border-border">
               <img src={previewUrl} alt="Vorschau des gewählten Fotos" className="w-full h-full object-cover" />
@@ -314,20 +294,7 @@ export function OQ_({ open: isOpen, onClose: handleClose, userId: uid, labels: k
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => cameraInput.current?.click()}
-                className="rounded-2xl border border-dashed border-brand/50 bg-brand/5 py-5 flex flex-col items-center gap-1.5 text-brand font-semibold text-sm active:scale-[0.97] transition-transform"
-              >
-                <Camera size={22} aria-hidden="true" /> Kamera
-              </button>
-              <button
-                onClick={() => galleryInput.current?.click()}
-                className="rounded-2xl border border-dashed border-border bg-bg-elevated py-5 flex flex-col items-center gap-1.5 text-text-secondary font-semibold text-sm active:scale-[0.97] transition-transform"
-              >
-                <ImagePlus size={22} aria-hidden="true" /> Aus Fotos
-              </button>
-            </div>
+            <PhotoSourceButtons onPick={chooseFile} />
           )}
         </div>
         <div>
@@ -729,8 +696,7 @@ export function Weight() {
     [photoLabel, setPhotoLabel] = useState(DEFAULT_LABELS[0]),
     [uploading, setUploading] = useState(false),
     [tab, setTab] = useState('log'),
-    [viewPhotoUrl, setViewPhotoUrl] = useState(null),
-    fileInput = useRef(null)
+    [viewPhotoUrl, setViewPhotoUrl] = useState(null)
   async function loadEntries() {
     if (!authUser) return
     let [entriesResult, settingsResult] = await Promise.all([
@@ -1077,17 +1043,6 @@ export function Weight() {
             <label className="label flex items-center gap-1.5">
               <Camera size={13} /> Körperfoto (optional)
             </label>
-            <input
-              ref={fileInput}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(event) => {
-                let chosen = event.target.files?.[0]
-                chosen && choosePhoto(chosen)
-              }}
-            />
             {photoPreview ? (
               <div className="relative">
                 <img src={photoPreview} alt="Vorschau" className="w-full h-40 object-cover rounded-xl border border-border" />
@@ -1096,17 +1051,13 @@ export function Weight() {
                     ;(setPhotoFile(null), setPhotoPreview(null))
                   }}
                   className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 text-white hover:bg-danger/80 transition-colors"
+                  aria-label="Foto entfernen"
                 >
                   <X size={14} />
                 </button>
               </div>
             ) : (
-              <button
-                onClick={() => fileInput.current?.click()}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-border hover:border-brand/50 hover:bg-brand/5 transition-colors text-sm text-text-muted"
-              >
-                <Camera size={16} /> Foto aufnehmen oder auswählen
-              </button>
+              <PhotoSourceButtons compact onPick={choosePhoto} />
             )}
             {photoPreview && (
               <div className="mt-3">

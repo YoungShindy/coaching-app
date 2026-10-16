@@ -114,6 +114,7 @@ export interface Database {
           einschlafzeit: string | null
           aufwachzeit: string | null
           schlafqualitaet: number | null
+          hrv_ms: number | null
           notizen: string | null
           created_at: string
         }

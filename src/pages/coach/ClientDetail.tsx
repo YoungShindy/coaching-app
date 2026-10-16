@@ -546,6 +546,9 @@ export function ClientDetail() {
     stunden: calcSleepHours(s.einschlafzeit!, s.aufwachzeit!),
   }))
 
+  const hrvChartData = schlaf.filter(s => s.hrv_ms != null).slice(-30).map(s => ({ datum: formatDate(s.datum, 'dd.MM'), hrv: Number(s.hrv_ms) }))
+  const hrvAvg = hrvChartData.length ? Math.round(hrvChartData.reduce((a, d) => a + d.hrv, 0) / hrvChartData.length) : null
+
   const tabs = [
     { id: 'overview', label: 'Übersicht' },
     { id: 'anamnese', label: 'Anamnese' },
@@ -679,6 +682,28 @@ export function ClientDetail() {
                   <Tooltip content={<CT />} />
                   <Bar isAnimationActive={false} dataKey="stunden" fill={colors.accent} radius={[4, 4, 0, 0]} />
                 </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {hrvChartData.length > 1 && (
+            <div className="col-span-2 card">
+              <h3 className="font-semibold text-text-primary mb-1">HRV Verlauf</h3>
+              <p className="text-xs text-text-muted mb-4">Herzratenvariabilität in ms{hrvAvg !== null && ` · Ø ${hrvAvg} ms`}</p>
+              <ResponsiveContainer width="100%" height={200}>
+                <AreaChart data={hrvChartData}>
+                  <defs>
+                    <linearGradient id="coachHrvGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={colors.brand} stopOpacity={0.3} />
+                      <stop offset="95%" stopColor={colors.brand} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} vertical={false} />
+                  <XAxis dataKey="datum" tick={{ fill: colors.tick, fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: colors.tick, fontSize: 11 }} axisLine={false} tickLine={false} domain={['dataMin - 10', 'dataMax + 10']} />
+                  <Tooltip content={<CT />} />
+                  <Area isAnimationActive={false} type="monotone" dataKey="hrv" stroke={colors.brand} strokeWidth={2.5} fill="url(#coachHrvGrad)" dot={{ fill: colors.brand, r: 3 }} />
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           )}
@@ -943,7 +968,7 @@ export function ClientDetail() {
         <div className="card overflow-x-auto">
           <h3 className="font-semibold text-text-primary mb-4">Schlaflog ({schlaf.length} Einträge)</h3>
           <table className="w-full text-sm">
-            <thead><tr className="border-b border-border"><th className="text-left py-2 px-3 text-text-muted font-medium">Datum</th><th className="text-left py-2 px-3 text-text-muted font-medium">Einschlaf</th><th className="text-left py-2 px-3 text-text-muted font-medium">Aufwach</th><th className="text-right py-2 px-3 text-text-muted font-medium">Dauer</th><th className="text-right py-2 px-3 text-text-muted font-medium">Qualität</th></tr></thead>
+            <thead><tr className="border-b border-border"><th className="text-left py-2 px-3 text-text-muted font-medium">Datum</th><th className="text-left py-2 px-3 text-text-muted font-medium">Einschlaf</th><th className="text-left py-2 px-3 text-text-muted font-medium">Aufwach</th><th className="text-right py-2 px-3 text-text-muted font-medium">Dauer</th><th className="text-right py-2 px-3 text-text-muted font-medium">Qualität</th><th className="text-right py-2 px-3 text-text-muted font-medium">HRV</th></tr></thead>
             <tbody>
               {[...schlaf].reverse().map(s => {
                 const h = s.einschlafzeit && s.aufwachzeit ? calcSleepHours(s.einschlafzeit, s.aufwachzeit) : null
@@ -954,6 +979,7 @@ export function ClientDetail() {
                     <td className="py-2.5 px-3 text-text-primary">{s.aufwachzeit ?? '--'}</td>
                     <td className="py-2.5 px-3 text-right font-semibold text-text-primary">{h ? `${h}h` : '--'}</td>
                     <td className="py-2.5 px-3 text-right text-text-secondary">{s.schlafqualitaet ? `${s.schlafqualitaet}/10` : '--'}</td>
+                    <td className="py-2.5 px-3 text-right text-text-secondary">{s.hrv_ms != null ? `${Number(s.hrv_ms)} ms` : '--'}</td>
                   </tr>
                 )
               })}

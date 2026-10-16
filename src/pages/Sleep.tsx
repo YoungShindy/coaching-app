@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Plus, Trash2, Moon, Camera, Sparkles, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Plus, Trash2, Moon, Camera, Sparkles, X, HeartPulse, TrendingUp, TrendingDown } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
@@ -7,8 +7,10 @@ import { formatDate, calcSleepHours, todayISO } from '../lib/utils'
 import { Modal } from '../components/ui/Modal'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Spinner } from '../components/ui/Spinner'
+import { useCountUpText } from '../hooks/useCountUp'
+import { isMissingColumn } from '../lib/dbErrors'
 import type { SchlafEntry } from '../types/database'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
+import { BarChart, Bar, Area, AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null
@@ -19,6 +21,34 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     </div>
   )
 }
+
+const HrvTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="card !p-3 text-xs">
+      <div className="text-text-muted mb-1">{label}</div>
+      <div className="text-text-primary font-bold">{payload[0]?.value} ms</div>
+    </div>
+  )
+}
+
+// Meldet true, sobald das Element (einmalig) im sichtbaren Bereich ist – so läuft die Graph-Animation erst, wenn man sie sieht
+function useInViewOnce<T extends Element>() {
+  const [el, setEl] = useState<T | null>(null)
+  const [seen, setSeen] = useState(false)
+  useEffect(() => {
+    if (!el || seen) return
+    if (typeof IntersectionObserver === 'undefined') { setSeen(true); return }
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) { setSeen(true); observer.disconnect() }
+    }, { threshold: 0.35 })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [el, seen])
+  return [setEl, seen] as const
+}
+
+const EMPTY_FORM = { datum: todayISO(), einschlafzeit: '23:00', aufwachzeit: '07:00', schlafqualitaet: '7', hrv: '', notizen: '' }
 
 function QualityStars({ value }: { value: number | null }) {
   if (!value) return <span className="text-text-muted">--</span>
@@ -43,7 +73,8 @@ export function Sleep() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [sleepGoal, setSleepGoal] = useState(8)
-  const [form, setForm] = useState({ datum: todayISO(), einschlafzeit: '23:00', aufwachzeit: '07:00', schlafqualitaet: '7', notizen: '' })
+  const [form, setForm] = useState({ ...EMPTY_FORM })
+  const [saveError, setSaveError] = useState('')
 
   async function load() {
     if (!user) return
@@ -75,6 +106,7 @@ export function Sleep() {
             einschlafzeit: r.einschlafzeit || f.einschlafzeit,
             aufwachzeit: r.aufwachzeit || f.aufwachzeit,
             schlafqualitaet: r.schlafqualitaet ? String(Math.min(10, Math.max(1, Math.round(r.schlafqualitaet)))) : f.schlafqualitaet,
+            hrv: r.hrv_ms && r.hrv_ms > 0 && r.hrv_ms <= 500 ? String(Math.round(r.hrv_ms * 10) / 10) : f.hrv,
             notizen: r.notizen || f.notizen,
           }))
         }
@@ -89,19 +121,39 @@ export function Sleep() {
 
   async function handleSave() {
     if (!user) return
+    const hrv = parseFloat(form.hrv.replace(',', '.'))
+    if (form.hrv && !(hrv > 0 && hrv <= 500)) {
+      setSaveError('Die HRV muss zwischen 1 und 500 ms liegen.')
+      return
+    }
     setSaving(true)
-    await supabase.from('schlaf').upsert({
+    setSaveError('')
+    const row = {
       user_id: user.id,
       datum: form.datum,
       einschlafzeit: form.einschlafzeit,
       aufwachzeit: form.aufwachzeit,
       schlafqualitaet: form.schlafqualitaet ? parseInt(form.schlafqualitaet) : null,
       notizen: form.notizen || null,
-    }, { onConflict: 'user_id,datum' })
+    }
+    let { error } = await supabase.from('schlaf').upsert(
+      { ...row, hrv_ms: form.hrv ? Math.round(hrv * 10) / 10 : null },
+      { onConflict: 'user_id,datum' },
+    )
+    if (isMissingColumn(error)) {
+      // Datenbank-Update (Spalte hrv_ms) noch nicht eingespielt: Schlaf speichern, HRV nicht
+      ;({ error } = await supabase.from('schlaf').upsert(row, { onConflict: 'user_id,datum' }))
+      if (!error && form.hrv) alert('Der Schlaf wurde gespeichert, die HRV aber nicht: Das Datenbank-Update für die HRV fehlt noch.')
+    }
+    if (error) {
+      setSaveError('Speichern fehlgeschlagen. Bitte versuche es noch einmal.')
+      setSaving(false)
+      return
+    }
     await load()
     setOpen(false)
     setPhotoPreview(null)
-    setForm({ datum: todayISO(), einschlafzeit: '23:00', aufwachzeit: '07:00', schlafqualitaet: '7', notizen: '' })
+    setForm({ ...EMPTY_FORM, datum: todayISO() })
     setSaving(false)
   }
 
@@ -128,6 +180,24 @@ export function Sleep() {
 
   const chartData = withHours.slice(-21)
 
+  const hrvData = useMemo(
+    () => entries
+      .filter(e => e.hrv_ms != null)
+      .slice(-30)
+      .map(e => ({ datumLabel: formatDate(e.datum, 'dd.MM'), hrv: Number(e.hrv_ms) })),
+    [entries],
+  )
+  const hrvAvg = hrvData.length ? Math.round(hrvData.reduce((a, b) => a + b.hrv, 0) / hrvData.length) : null
+  const hrvLatest = hrvData.length ? hrvData[hrvData.length - 1].hrv : null
+  const hrvDelta = hrvLatest !== null && hrvData.length > 1
+    ? Math.round((hrvLatest - hrvData.slice(0, -1).reduce((a, b) => a + b.hrv, 0) / (hrvData.length - 1)) * 10) / 10
+    : null
+  const hrvAxis = hrvData.length
+    ? [Math.max(0, Math.floor(Math.min(...hrvData.map(d => d.hrv)) / 10) * 10 - 10), Math.ceil(Math.max(...hrvData.map(d => d.hrv)) / 10) * 10 + 10]
+    : [0, 100]
+  const [hrvChartRef, hrvChartSeen] = useInViewOnce<HTMLDivElement>()
+  const hrvLatestRef = useCountUpText<HTMLSpanElement>(hrvLatest ?? 0, v => String(Math.round(v)), { duration: 1100 })
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -141,7 +211,7 @@ export function Sleep() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="card text-center">
           <div className="text-2xl font-bold text-text-primary">{avgSleep ? `${avgSleep}h` : '--'}</div>
           <div className="text-xs text-text-muted mt-1">Ø Schlafdauer</div>
@@ -153,6 +223,10 @@ export function Sleep() {
         <div className="card text-center">
           <div className="text-2xl font-bold text-text-primary">{avgQuality ? `${avgQuality}/10` : '--'}</div>
           <div className="text-xs text-text-muted mt-1">Ø Qualität</div>
+        </div>
+        <div className="card text-center">
+          <div className="text-2xl font-bold text-text-primary">{hrvAvg !== null ? `${hrvAvg} ms` : '--'}</div>
+          <div className="text-xs text-text-muted mt-1">Ø HRV</div>
         </div>
       </div>
 
@@ -173,6 +247,67 @@ export function Sleep() {
         </div>
       )}
 
+      {/* HRV */}
+      {hrvData.length > 0 && (
+        <div className="card">
+          <div className="flex items-start justify-between gap-4 mb-6">
+            <div>
+              <h2 className="section-title flex items-center gap-2"><HeartPulse size={18} className="text-danger" /> HRV Verlauf</h2>
+              <p className="text-xs text-text-muted mt-1">Herzratenvariabilität in ms{hrvAvg !== null && <> · gestrichelt: Ø {hrvAvg} ms</>}</p>
+            </div>
+            <div className="text-right shrink-0">
+              <div className="text-3xl font-bold text-text-primary leading-none">
+                <span ref={hrvLatestRef} className="tabular-nums" />
+                <span className="text-sm font-semibold text-text-muted ml-1">ms</span>
+              </div>
+              {hrvDelta !== null && (
+                <div className={`mt-1.5 inline-flex items-center gap-1 text-xs font-semibold ${hrvDelta >= 0 ? 'text-success' : 'text-warning'}`}>
+                  {hrvDelta >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+                  {hrvDelta > 0 ? '+' : ''}{hrvDelta} ms zum Schnitt
+                </div>
+              )}
+            </div>
+          </div>
+          {hrvData.length > 1 ? (
+            <div ref={hrvChartRef} style={{ height: 260 }}>
+            {hrvChartSeen && (
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={hrvData}>
+                <defs>
+                  <linearGradient id="hrvGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={colors.brand} stopOpacity={0.35} />
+                    <stop offset="95%" stopColor={colors.brand} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} vertical={false} />
+                <XAxis dataKey="datumLabel" tick={{ fill: colors.tick, fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: colors.tick, fontSize: 11 }} axisLine={false} tickLine={false} domain={hrvAxis} />
+                <Tooltip content={<HrvTooltip />} />
+                {hrvAvg !== null && (
+                  <ReferenceLine y={hrvAvg} stroke={colors.success} strokeDasharray="6 3" />
+                )}
+                <Area
+                  isAnimationActive
+                  animationDuration={1600}
+                  animationEasing="ease-out"
+                  type="monotone"
+                  dataKey="hrv"
+                  stroke={colors.brand}
+                  strokeWidth={2.5}
+                  fill="url(#hrvGrad)"
+                  dot={{ fill: colors.brand, r: 3 }}
+                  activeDot={{ r: 6 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+            )}
+            </div>
+          ) : (
+            <p className="text-sm text-text-muted text-center py-6">Trage die HRV an mehreren Tagen ein, dann siehst du hier den Verlauf.</p>
+          )}
+        </div>
+      )}
+
       {/* Table */}
       <div className="card">
         <h2 className="section-title mb-4">Einträge</h2>
@@ -190,6 +325,7 @@ export function Sleep() {
                   <th className="text-left py-2 px-3 text-text-muted font-medium">Aufgewacht</th>
                   <th className="text-right py-2 px-3 text-text-muted font-medium">Dauer</th>
                   <th className="text-left py-2 px-3 text-text-muted font-medium">Qualität</th>
+                  <th className="text-right py-2 px-3 text-text-muted font-medium">HRV</th>
                   <th className="py-2 px-3" />
                 </tr>
               </thead>
@@ -209,6 +345,7 @@ export function Sleep() {
                       <td className="py-2.5 px-3">
                         <QualityStars value={e.schlafqualitaet} />
                       </td>
+                      <td className="py-2.5 px-3 text-right text-text-primary">{e.hrv_ms != null ? `${Number(e.hrv_ms)} ms` : '--'}</td>
                       <td className="py-2.5 px-3 text-right">
                         <button onClick={() => handleDelete(e.id)} className="p-1.5 rounded hover:bg-danger/10 hover:text-danger text-text-muted transition-colors">
                           <Trash2 size={14} />
@@ -297,11 +434,22 @@ export function Sleep() {
             </div>
           </div>
           <div>
+            <label className="label flex items-center gap-1.5"><HeartPulse size={13} /> HRV in ms (optional)</label>
+            <input
+              type="number" inputMode="decimal" min="1" max="500" step="0.1" className="input"
+              placeholder="z. B. 55"
+              value={form.hrv}
+              onChange={e => setForm(f => ({ ...f, hrv: e.target.value }))}
+            />
+            <p className="text-xs text-text-muted mt-1">Den Wert findest du in deiner Uhr oder Schlaf-App (Apple Health, Oura, Whoop, Garmin).</p>
+          </div>
+          <div>
             <label className="label">Notizen (optional)</label>
             <input type="text" className="input" placeholder="Wie hast du geschlafen?" value={form.notizen} onChange={e => setForm(f => ({ ...f, notizen: e.target.value }))} />
           </div>
+          {saveError && <p role="alert" className="text-sm text-danger">{saveError}</p>}
           <div className="flex gap-3 pt-2">
-            <button onClick={() => setOpen(false)} className="btn-secondary flex-1">Abbrechen</button>
+            <button onClick={() => { setOpen(false); setSaveError('') }} className="btn-secondary flex-1">Abbrechen</button>
             <button onClick={handleSave} className="btn-primary flex-1 flex items-center justify-center gap-2" disabled={saving}>
               {saving && <Spinner size={16} />}
               Speichern

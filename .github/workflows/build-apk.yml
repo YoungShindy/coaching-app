@@ -1,8 +1,7 @@
 name: Build Android APK
 
+# Die APK wird nur noch von Hand gebaut ("Run workflow"), nicht mehr bei jedem Merge auf main.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 jobs:

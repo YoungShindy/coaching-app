@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Plus, Trash2, Camera, Sparkles, X, Search,
   ChevronLeft, ChevronRight, Droplets, Check, FileText, BookOpen, ScanLine,
@@ -11,23 +12,10 @@ import { Spinner } from '../components/ui/Spinner'
 import { WaterTracker } from '../components/WaterTracker'
 import { useGame } from '../hooks/useGame'
 import type { FoodLogItem, WasserLogEntry, Rezept } from '../types/database'
+import { FoodSearchPanel, PortionPicker, type FoodItemInput } from '../components/food/FoodAdd'
+import { lookupBarcodeEntry, type FoodEntry } from '../lib/foodDb'
 
-// ─── Local types ──────────────────────────────────────────────────────────────
-
-interface OFFNutriments {
-  'energy-kcal_100g'?: number
-  proteins_100g?: number
-  carbohydrates_100g?: number
-  fat_100g?: number
-}
-
-interface OFFProduct {
-  product_name?: string
-  product_name_de?: string
-  brands?: string
-  nutriments?: OFFNutriments
-  serving_quantity?: number
-}
+// ─── Local types ───────────────────────────────────────────────────────────────────────────
 
 interface NutritionGoals {
   kalorie_tagesziel: number
@@ -36,17 +24,7 @@ interface NutritionGoals {
   fett_ziel: number
 }
 
-interface FoodItemInput {
-  name: string
-  menge_g: number | null
-  kalorien: number
-  protein_g: number
-  kohlenhydrate_g: number
-  fett_g: number
-  barcode?: string
-}
-
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Constants ───────────────────────────────────────────────────────────────────────────
 
 const MEALS = [
   { id: 'Frühstück', icon: '🌅', color: 'warning' },
@@ -58,7 +36,7 @@ const MEALS = [
 const WATER_GOAL_ML = 2000
 const BOTTLE_KEY = 'hlx-bottle-ml'
 
-// ─── Date helpers ─────────────────────────────────────────────────────────────
+// ─── Date helpers ───────────────────────────────────────────────────────────────────────────
 
 function shiftDate(iso: string, days: number): string {
   const d = new Date(iso + 'T00:00:00')
@@ -75,7 +53,7 @@ function formatDateLabel(iso: string): string {
   })
 }
 
-// ─── CalorieRing ──────────────────────────────────────────────────────────────
+// ─── CalorieRing ───────────────────────────────────────────────────────────────────────────
 
 function CalorieRing({ eaten, goal }: { eaten: number; goal: number }) {
   const { colors } = useTheme()
@@ -106,7 +84,7 @@ function CalorieRing({ eaten, goal }: { eaten: number; goal: number }) {
   )
 }
 
-// ─── CalorieBilanzRing ────────────────────────────────────────────────────────
+// ─── CalorieBilanzRing ────────────────────────────────────────────────────────────────────────
 
 function CalorieBilanzRing({ consumed, burned, goal }: { consumed: number; burned: number; goal: number }) {
   const { colors } = useTheme()
@@ -163,7 +141,7 @@ function CalorieBilanzRing({ consumed, burned, goal }: { consumed: number; burne
   )
 }
 
-// ─── MacroBar ─────────────────────────────────────────────────────────────────
+// ─── MacroBar ───────────────────────────────────────────────────────────────────────────
 
 function MacroBar({ label, value, goal, color }: { label: string; value: number; goal: number; color: string }) {
   const pct = goal > 0 ? Math.min((value / goal) * 100, 100) : 0
@@ -184,85 +162,7 @@ function MacroBar({ label, value, goal, color }: { label: string; value: number;
   )
 }
 
-// ─── FoodSearch (Open Food Facts) ────────────────────────────────────────────
-
-function FoodSearch({ onSelect }: { onSelect: (p: OFFProduct) => void }) {
-  const [q, setQ] = useState('')
-  const [results, setResults] = useState<OFFProduct[]>([])
-  const [loading, setLoading] = useState(false)
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-
-  const doSearch = useCallback(async (term: string) => {
-    if (term.length < 2) { setResults([]); return }
-    setLoading(true)
-    try {
-      const res = await fetch(
-        `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(term)}&json=1&page_size=20&fields=product_name,product_name_de,brands,nutriments,serving_quantity&lc=de&cc=de`
-      )
-      const data = await res.json()
-      const products = ((data.products ?? []) as OFFProduct[]).filter(p =>
-        (p.product_name || p.product_name_de) && (p.nutriments?.['energy-kcal_100g'] ?? 0) > 0
-      )
-      setResults(products.slice(0, 15))
-    } catch {
-      setResults([])
-    }
-    setLoading(false)
-  }, [])
-
-  useEffect(() => {
-    clearTimeout(timer.current)
-    timer.current = setTimeout(() => doSearch(q), 500)
-    return () => clearTimeout(timer.current)
-  }, [q, doSearch])
-
-  return (
-    <div className="space-y-3">
-      <div className="relative">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
-        <input
-          type="search" className="input pl-9"
-          placeholder="Lebensmittel suchen..."
-          value={q} onChange={e => setQ(e.target.value)}
-          autoFocus
-        />
-      </div>
-      {loading && <div className="flex justify-center py-4"><Spinner /></div>}
-      {results.length > 0 && (
-        <div className="space-y-1.5 overflow-y-auto" style={{ maxHeight: 260 }}>
-          {results.map((p, i) => {
-            const n = p.nutriments ?? {}
-            const name = p.product_name_de || p.product_name || ''
-            return (
-              <button key={i} onClick={() => onSelect(p)}
-                className="w-full flex items-center justify-between p-3 rounded-xl bg-bg-elevated hover:bg-brand/10 text-left transition-colors">
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-text-primary truncate">{name}</div>
-                  {p.brands && <div className="text-xs text-text-muted truncate">{p.brands}</div>}
-                </div>
-                <div className="text-right text-xs ml-3 shrink-0">
-                  <div className="font-semibold text-text-primary">
-                    {Math.round(n['energy-kcal_100g'] ?? 0)} kcal
-                  </div>
-                  <div className="text-text-secondary">
-                    P:{Math.round((n.proteins_100g ?? 0) * 10) / 10}
-                    {' '}K:{Math.round((n.carbohydrates_100g ?? 0) * 10) / 10}
-                    {' '}F:{Math.round((n.fat_100g ?? 0) * 10) / 10}
-                  </div>
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      )}
-      {q.length >= 2 && !loading && results.length === 0 && (
-        <p className="text-center py-6 text-sm text-text-muted">Keine Ergebnisse gefunden</p>
-      )}
-    </div>
-  )
-}
-
-// ─── LiveBarcodeScanner ───────────────────────────────────────────────────────
+// ─── LiveBarcodeScanner ────────────────────────────────────────────────────────────────────────
 
 function LiveBarcodeScanner({ onDetected, onClose }: { onDetected: (code: string) => void; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -350,75 +250,7 @@ function LiveBarcodeScanner({ onDetected, onClose }: { onDetected: (code: string
   )
 }
 
-// ─── PortionSelector ─────────────────────────────────────────────────────────
-
-function PortionSelector({ product, barcode, onConfirm, onBack }: {
-  product: OFFProduct
-  barcode?: string
-  onConfirm: (item: FoodItemInput) => void
-  onBack: () => void
-}) {
-  const [menge, setMenge] = useState(String(product.serving_quantity ?? 100))
-  const n = product.nutriments ?? {}
-  const g = parseFloat(menge) || 0
-  const f = g / 100
-  const name = product.product_name_de || product.product_name || 'Unbekannt'
-
-  const macros = {
-    kalorien: Math.round((n['energy-kcal_100g'] ?? 0) * f),
-    protein_g: Math.round((n.proteins_100g ?? 0) * f * 10) / 10,
-    kohlenhydrate_g: Math.round((n.carbohydrates_100g ?? 0) * f * 10) / 10,
-    fett_g: Math.round((n.fat_100g ?? 0) * f * 10) / 10,
-  }
-
-  return (
-    <div className="space-y-4">
-      <div>
-        <div className="font-semibold text-text-primary text-sm">{name}</div>
-        {product.brands && <div className="text-xs text-text-muted">{product.brands}</div>}
-        <div className="text-[11px] text-text-muted mt-0.5">
-          pro 100g: {Math.round(n['energy-kcal_100g'] ?? 0)} kcal ·
-          {' '}P:{Math.round((n.proteins_100g ?? 0) * 10) / 10}g ·
-          {' '}K:{Math.round((n.carbohydrates_100g ?? 0) * 10) / 10}g ·
-          {' '}F:{Math.round((n.fat_100g ?? 0) * 10) / 10}g
-        </div>
-      </div>
-      <div>
-        <label className="label">Menge (g)</label>
-        <input type="number" className="input" value={menge}
-          onChange={e => setMenge(e.target.value)} min="1" max="5000" autoFocus />
-      </div>
-      {g > 0 && (
-        <div className="grid grid-cols-4 gap-2 p-3 bg-bg-elevated rounded-xl">
-          {([
-            { l: 'Kalorien', v: macros.kalorien, u: 'kcal' },
-            { l: 'Protein', v: macros.protein_g, u: 'g' },
-            { l: 'Karbs', v: macros.kohlenhydrate_g, u: 'g' },
-            { l: 'Fett', v: macros.fett_g, u: 'g' },
-          ] as const).map(m => (
-            <div key={m.l} className="text-center">
-              <div className="text-sm font-bold text-text-primary">{m.v}</div>
-              <div className="text-[10px] text-text-muted">{m.u}</div>
-              <div className="text-[10px] text-text-muted">{m.l}</div>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="flex gap-3">
-        <button onClick={onBack} className="btn-secondary flex-1">Zurück</button>
-        <button
-          onClick={() => onConfirm({ name, menge_g: g, ...macros, barcode })}
-          disabled={g <= 0}
-          className="btn-primary flex-1"
-        >
-          Hinzufügen
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ─── AddFoodModal ─────────────────────────────────────────────────────────────
+// ─── AddFoodModal ───────────────────────────────────────────────────────────────────────────
 
 type AddTab = 'search' | 'barcode' | 'photo' | 'text' | 'rezepte' | 'manual'
 
@@ -429,8 +261,7 @@ function AddFoodModal({ meal, onClose, onAdd }: {
 }) {
   const { user } = useAuth()
   const [tab, setTab] = useState<AddTab>('search')
-  const [selectedProduct, setSelectedProduct] = useState<OFFProduct | null>(null)
-  const [selectedBarcode, setSelectedBarcode] = useState<string | undefined>()
+  const [selectedEntry, setSelectedEntry] = useState<FoodEntry | null>(null)
   const [barcodeInput, setBarcodeInput] = useState('')
   const [barcodeLoading, setBarcodeLoading] = useState(false)
   const [barcodeError, setBarcodeError] = useState('')
@@ -466,12 +297,9 @@ function AddFoodModal({ meal, onClose, onAdd }: {
     setBarcodeLoading(true)
     setBarcodeError('')
     try {
-      const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`)
-      const data = await res.json()
-      const p = data.product as OFFProduct | undefined
-      if (data.status === 1 && p?.nutriments?.['energy-kcal_100g']) {
-        setSelectedProduct(p)
-        setSelectedBarcode(code)
+      const entry = await lookupBarcodeEntry(code)
+      if (entry) {
+        setSelectedEntry(entry)
       } else {
         setBarcodeError('Produkt nicht gefunden. Bitte Nummer prüfen oder manuell eingeben.')
       }
@@ -626,8 +454,7 @@ function AddFoodModal({ meal, onClose, onAdd }: {
 
   function switchTab(t: AddTab) {
     setTab(t)
-    setSelectedProduct(null)
-    setSelectedBarcode(undefined)
+    setSelectedEntry(null)
     setBarcodeError('')
     setTextResult(null)
     setTextError('')
@@ -646,55 +473,60 @@ function AddFoodModal({ meal, onClose, onAdd }: {
     { id: 'manual', emoji: '✏️', label: 'Manuell' },
   ]
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end"
-      style={{ background: 'rgba(0,0,0,0.65)' }}
-      onClick={onClose}
-    >
-      <div
-        className="relative w-full rounded-t-4xl overflow-y-auto bg-bg-card"
-        style={{ maxHeight: '88vh' }}
-        onClick={e => e.stopPropagation()}
-      >
+  const mealIcon = MEALS.find(m => m.id === meal)?.icon
+
+  // Über ein Portal in <body>: sonst greift die Seiten-Einblendung (.page > * > *) und der Dialog blitzt durchsichtig auf
+  return createPortal(
+    <div className="fixed inset-0 z-50 bg-bg-card sheet-in" role="dialog" aria-modal="true" aria-label={`Hinzufügen — ${meal}`}>
+      <div className="relative h-full w-full overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 z-10 px-4 pt-3 pb-3 border-b border-border bg-bg-card">
-          <div className="w-10 h-1 bg-border-light rounded-full mx-auto mb-3" />
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-text-primary text-sm">Hinzufügen — {meal}</h3>
-            <button onClick={onClose} className="p-1 text-text-muted hover:text-text-primary rounded-lg">
-              <X size={16} />
-            </button>
-          </div>
-          <div className="flex gap-0.5 bg-bg rounded-xl p-0.5">
-            {TABS.map(t => (
+        <div className="sticky top-0 z-10 border-b border-border bg-bg-card pt-[max(0.75rem,env(safe-area-inset-top))]">
+          <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 pb-4">
+            <div className="flex items-center justify-between gap-3 py-2">
+              <h3 className="flex items-center gap-2.5 text-xl font-bold text-text-primary min-w-0">
+                {mealIcon && <span className="text-2xl" aria-hidden="true">{mealIcon}</span>}
+                <span className="truncate">Hinzufügen <span className="text-text-muted font-semibold">· {meal}</span></span>
+              </h3>
               <button
-                key={t.id}
-                onClick={() => switchTab(t.id)}
-                className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded-lg transition-all ${
-                  tab === t.id ? 'bg-primary text-white' : 'text-text-secondary hover:text-text-primary'
-                }`}
+                onClick={onClose}
+                className="w-11 h-11 shrink-0 rounded-full bg-bg-elevated flex items-center justify-center text-text-secondary hover:text-text-primary transition-colors"
+                aria-label="Schließen"
               >
-                <span className="text-sm">{t.emoji}</span>
-                <span className="text-[11px] font-medium">{t.label}</span>
+                <X size={20} />
               </button>
-            ))}
+            </div>
+            <div className="grid grid-cols-6 gap-1 bg-bg rounded-2xl p-1 mt-1" role="tablist">
+              {TABS.map(t => (
+                <button
+                  key={t.id}
+                  role="tab"
+                  aria-selected={tab === t.id}
+                  onClick={() => switchTab(t.id)}
+                  className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl transition-all ${
+                    tab === t.id ? 'bg-primary text-white shadow-sm' : 'text-text-secondary hover:text-text-primary'
+                  }`}
+                >
+                  <span className="text-xl leading-none">{t.emoji}</span>
+                  <span className="text-xs font-semibold">{t.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         {/* Body */}
-        <div className="p-4">
-          {selectedProduct && (tab === 'search' || tab === 'barcode') ? (
-            <PortionSelector
-              product={selectedProduct}
-              barcode={selectedBarcode}
+        <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 py-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          {selectedEntry && (tab === 'search' || tab === 'barcode') ? (
+            <PortionPicker
+              entry={selectedEntry}
+              busy={saving}
               onConfirm={item => handleAdd(item)}
-              onBack={() => { setSelectedProduct(null); setSelectedBarcode(undefined) }}
+              onBack={() => setSelectedEntry(null)}
             />
           ) : (
             <>
               {tab === 'search' && (
-                <FoodSearch onSelect={p => { setSelectedProduct(p); setSelectedBarcode(undefined) }} />
+                <FoodSearchPanel onSelect={entry => setSelectedEntry(entry)} />
               )}
 
               {tab === 'barcode' && (
@@ -1158,11 +990,12 @@ function AddFoodModal({ meal, onClose, onAdd }: {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
-// ─── MealSection ─────────────────────────────────────────────────────────────
+// ─── MealSection ───────────────────────────────────────────────────────────────────────────
 
 function MealSection({ meal, items, onAdd, onDelete }: {
   meal: typeof MEALS[number]
@@ -1227,7 +1060,7 @@ function MealSection({ meal, items, onAdd, onDelete }: {
   )
 }
 
-// ─── Nutrition Page ───────────────────────────────────────────────────────────
+// ─── Nutrition Page ──────────────────────────────────────────────────────────────────────────
 
 export function Nutrition() {
   const { user } = useAuth()
